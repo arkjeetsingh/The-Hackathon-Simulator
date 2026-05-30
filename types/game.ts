@@ -62,6 +62,8 @@ export interface Judge {
   name: string;
   /** Emoji avatar for the judge */
   avatar: string;
+  /** Path to the judge's portrait image (in /public/avatars/) */
+  avatarImage?: string;
   /** Professional title */
   title: string;
   /** Areas of expertise */

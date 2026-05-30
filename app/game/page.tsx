@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGameStore, STAGE_ORDER } from "@/store/gameStore";
@@ -510,8 +511,45 @@ function TechStackStage() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
-  const [activeFilter, setActiveFilter] = useState('all'); // 'all' (compatible), 'all-bypass' (show all), 'recommended', 'synergic'
+  const [activeFilter, setActiveFilter] = useState('all');
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const slotRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Auto-scroll the slots panel to the newly selected slot
+  useEffect(() => {
+    if (!selectedSlotId) return;
+    const el = slotRefs.current[selectedSlotId];
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [selectedSlotId]);
+
+  // Maps a slot's compatibleCategories to the closest tab id
+  const getTabForSlot = (slot: typeof activeTemplate.slots[number]): string => {
+    const cats = slot.compatibleCategories;
+    if (cats.some(c => ['Frontend', 'Design / UI', 'AR / VR', 'Mobile'].includes(c))) return 'frontend';
+    if (cats.some(c => ['Backend', 'Realtime / Messaging', 'Automation'].includes(c))) return 'backend';
+    if (cats.some(c => ['Database', 'Blockchain / Web3'].includes(c))) return 'database';
+    if (cats.some(c => ['Hosting / Infra', 'DevOps'].includes(c))) return 'devops';
+    if (cats.some(c => ['AI / ML'].includes(c))) return 'ai';
+    if (cats.some(c => ['IoT / Hardware'].includes(c))) return 'hardware';
+    if (cats.some(c => ['Authentication', 'Payments', 'Analytics', 'Productivity APIs'].includes(c))) return 'apis';
+    return 'all';
+  };
+
+  // After placing a tech, jump to the next empty slot and update tab
+  const autoAdvanceToNextSlot = (filledSlotId: string, currentStack: typeof techStack) => {
+    const slots = activeTemplate.slots;
+    const filledIdx = slots.findIndex(s => s.id === filledSlotId);
+    // Look for next unfilled slot after the one just filled
+    const nextSlot =
+      slots.slice(filledIdx + 1).find(s => !currentStack.some(t => t.category === s.id)) ||
+      slots.find(s => s.id !== filledSlotId && !currentStack.some(t => t.category === s.id));
+    if (nextSlot) {
+      setSelectedSlotId(nextSlot.id);
+      setActiveTab(getTabForSlot(nextSlot));
+    }
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -703,6 +741,8 @@ function TechStackStage() {
         const nextStack = [...techStack.filter((t) => t.category !== targetSlotId), tech];
         addTechItem(tech);
         recalculateTechScores(nextStack);
+        // Auto-advance to next empty slot
+        autoAdvanceToNextSlot(targetSlotId, nextStack);
       }
     }
   };
@@ -742,6 +782,8 @@ function TechStackStage() {
       addTechItem(item);
       recalculateTechScores(nextStack);
       playSnapSound();
+      // Auto-advance to next empty slot after drag-drop
+      autoAdvanceToNextSlot(targetSlotId, nextStack);
     }
   };
 
@@ -1033,7 +1075,8 @@ function TechStackStage() {
 
                   return (
                     <div 
-                      key={slot.id} 
+                      key={slot.id}
+                      ref={(el) => { slotRefs.current[slot.id] = el; }}
                       onClick={() => {
                         playMutedClick();
                         setSelectedSlotId(slot.id);
@@ -1720,21 +1763,28 @@ function JudgeSpinStage() {
       title="Spin Judge Wheel"
       subtitle="Engage the jury selector roulette. A randomized, expert judge profile will be selected to grade your project manifest."
     >
-      <div className="max-w-md mx-auto flex flex-col items-center justify-center font-mono text-[11px] space-y-6">
-        {/* SVG Wheel Roulette Container */}
-        <div className="relative w-64 h-64 flex items-center justify-center">
+      <div className="max-w-lg mx-auto flex flex-col items-center justify-center font-mono text-[11px] space-y-6">
+        {/* SVG Wheel Roulette Container — bigger, with avatar images */}
+        <div className="relative w-[360px] h-[360px] flex items-center justify-center">
           {/* Top Pointer */}
-          <div className="absolute -top-2 z-10 w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-t-[15px] border-t-neutral-900 drop-shadow-sm" />
+          <div className="absolute -top-3 z-10 w-0 h-0 border-l-[12px] border-l-transparent border-r-[12px] border-r-transparent border-t-[18px] border-t-neutral-900 drop-shadow-sm" />
 
           {/* SVG Circle Wheel */}
           <div
-            className="w-full h-full rounded-full border-2 border-neutral-900 overflow-hidden shadow-md bg-white"
+            className="w-full h-full rounded-full border-2 border-neutral-900 overflow-hidden shadow-lg bg-white"
             style={{
               transform: `rotate(${rotation}deg)`,
               transition: spinning ? "transform 2.5s cubic-bezier(0.15, 0.85, 0.35, 1)" : "none",
             }}
           >
             <svg viewBox="0 0 200 200" className="w-full h-full">
+              <defs>
+                {JUDGES.map((jg) => (
+                  <clipPath key={`clip-${jg.id}`} id={`clip-${jg.id}`}>
+                    <circle cx="100" cy="100" r="28" />
+                  </clipPath>
+                ))}
+              </defs>
               {JUDGES.map((jg, idx) => {
                 const angle = 360 / JUDGES.length;
                 const startAngle = idx * angle;
@@ -1759,32 +1809,79 @@ function JudgeSpinStage() {
                   "Z"
                 ].join(" ");
 
-                const fillColor = idx % 2 === 0 ? "#ffffff" : "#f4f4f5";
-                const textAngle = startAngle + angle / 2 - 90;
-                const textPos = polarToCartesian(100, 100, 60, startAngle + angle / 2);
+                // Alternate slice colours
+                const fillColors = ["#fafafa", "#f0f0f0", "#e8e8e8", "#f5f5f5", "#ebebeb"];
+                const fillColor = fillColors[idx % fillColors.length];
+
+                // Centre of the avatar image in the slice
+                const imgRadius = 58;
+                const midAngle = startAngle + angle / 2;
+                const imgCenter = polarToCartesian(100, 100, imgRadius, midAngle);
+                const imgSize = 22; // half-size for image element
+                const textAngle = midAngle - 90;
+
+                // Name label — pushed past avatar edge (avatar: center 58 + radius 22 = 80)
+                const labelPos = polarToCartesian(100, 100, 89, midAngle);
 
                 return (
                   <g key={jg.id} className="select-none">
+                    {/* Slice background */}
                     <path
                       d={d}
                       fill={fillColor}
                       stroke="#171717"
                       strokeWidth="1.5"
                     />
+
+                    {/* Avatar image centred in slice */}
+                    {jg.avatarImage && (
+                      <image
+                        href={jg.avatarImage}
+                        x={imgCenter.x - imgSize}
+                        y={imgCenter.y - imgSize}
+                        width={imgSize * 2}
+                        height={imgSize * 2}
+                        clipPath={`url(#clip-img-${jg.id})`}
+                        preserveAspectRatio="xMidYMid slice"
+                        style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.18))" }}
+                      />
+                    )}
+
+                    {/* Name label */}
                     <text
-                      x={textPos.x}
-                      y={textPos.y}
-                      transform={`rotate(${textAngle + 90}, ${textPos.x}, ${textPos.y})`}
+                      x={labelPos.x}
+                      y={labelPos.y}
+                      transform={`rotate(${textAngle + 90}, ${labelPos.x}, ${labelPos.y})`}
                       textAnchor="middle"
                       dominantBaseline="central"
-                      className="font-mono text-[9px] font-bold fill-neutral-900"
+                      style={{ fontSize: "7px", fontWeight: "700", fill: "#171717", fontFamily: "monospace" }}
                     >
-                      {jg.avatar} {jg.name.split(" ")[0]}
+                      {jg.name.split(" ")[0]}
                     </text>
                   </g>
                 );
               })}
-              <circle cx="100" cy="100" r="16" fill="#171717" stroke="#ffffff" strokeWidth="2" />
+
+              {/* Extra clip paths for avatar images positioned correctly in slices */}
+              <defs>
+                {JUDGES.map((jg, idx) => {
+                  const angle = 360 / JUDGES.length;
+                  const midAngle = idx * angle + angle / 2;
+                  const polarToCartesian = (cx: number, cy: number, r: number, deg: number) => {
+                    const rad = ((deg - 90) * Math.PI) / 180;
+                    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+                  };
+                  const imgCenter = polarToCartesian(100, 100, 58, midAngle);
+                  return (
+                    <clipPath key={`clip-img-${jg.id}`} id={`clip-img-${jg.id}`}>
+                      <circle cx={imgCenter.x} cy={imgCenter.y} r="22" />
+                    </clipPath>
+                  );
+                })}
+              </defs>
+
+              {/* Centre hub */}
+              <circle cx="100" cy="100" r="14" fill="#171717" stroke="#ffffff" strokeWidth="2" />
             </svg>
           </div>
         </div>
@@ -1795,7 +1892,7 @@ function JudgeSpinStage() {
             <Button
               onClick={spinWheel}
               onMouseEnter={playSubtleHover}
-              className="font-mono text-xs border border-neutral-900 w-full max-w-[200px] focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:outline-none focus:outline-none"
+              className="font-mono text-xs border border-neutral-900 w-full max-w-[220px] focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:outline-none focus:outline-none"
             >
               ⚡ SPIN_ROULETTE.EXE
             </Button>
@@ -1807,21 +1904,36 @@ function JudgeSpinStage() {
             </div>
           )}
 
-                    {judgeSpinState === "done" && currentJudge && (
-            <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-md w-full text-left space-y-3">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">{currentJudge.avatar}</span>
-                <div>
-                  <span className="text-neutral-400 block text-[9px] uppercase">SELECTED_JUDGE:</span>
-                  <span className="font-bold text-neutral-900 text-sm uppercase">{currentJudge.name}</span>
-                  <span className="text-[10px] text-muted-foreground block font-sans font-light leading-none mt-0.5">{currentJudge.title}</span>
+          {judgeSpinState === "done" && currentJudge && (
+            <div className="p-5 bg-neutral-50 border border-neutral-200 rounded-xl w-full text-left space-y-4">
+              {/* Selected judge avatar + info row */}
+              <div className="flex items-center gap-4">
+                <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-full ring-2 ring-neutral-900 shadow-md">
+                  {currentJudge.avatarImage ? (
+                    <Image
+                      src={currentJudge.avatarImage}
+                      alt={currentJudge.name}
+                      fill
+                      className="object-cover object-top"
+                      sizes="64px"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-neutral-100 text-2xl">
+                      {currentJudge.avatar}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="text-neutral-400 block text-[9px] uppercase tracking-wider mb-0.5">SELECTED_JUDGE:</span>
+                  <span className="font-bold text-neutral-900 text-base uppercase block leading-tight">{currentJudge.name}</span>
+                  <span className="text-[10px] text-muted-foreground block font-sans font-light leading-snug mt-0.5">{currentJudge.title}</span>
                 </div>
               </div>
-              
-              <div className="border-t border-dashed border-border pt-2 text-[10px] text-neutral-600 font-sans font-light leading-relaxed">
+
+              <div className="border-t border-dashed border-border pt-3 text-[10px] text-neutral-600 font-sans font-light leading-relaxed">
                 Expertise: {currentJudge.expertise.join(", ")}
               </div>
-              
+
               <Button
                 onClick={() => {
                   playMutedClick();

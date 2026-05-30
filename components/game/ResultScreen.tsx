@@ -10,6 +10,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import Image from 'next/image';
 import { RotateCcw, Share2, Sparkles, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -303,6 +304,18 @@ export default function ResultScreen() {
       });
   }, [selectedProblem, currentJudge, solutionDirection, techStack, usp, businessModel, features, archetype.name, grade, finalScore100]);
 
+  // ─── Typed feedback entry ─────────────────────────────────────────────────────
+  interface FeedbackEntry {
+    judgeId: string;
+    name: string;
+    avatar: string;
+    avatarImage?: string;
+    score: number;
+    comment: string;
+    highlight: string;
+    isLead: boolean;
+  }
+
   // Resolve the 3-judge panel for display
   const displayFeedbacks = (() => {
     if (!judgeFeedback || judgeFeedback.length === 0) return [];
@@ -313,10 +326,11 @@ export default function ResultScreen() {
 
     const leadJudgeProfile = JUDGES.find(j => j.id === leadFb.judgeId) || currentJudge || JUDGES[0];
 
-    const results = [{
+    const results: FeedbackEntry[] = [{
       judgeId: leadFb.judgeId,
       name: leadJudgeProfile.name,
       avatar: leadJudgeProfile.avatar,
+      avatarImage: leadJudgeProfile.avatarImage,
       score: leadFb.score,
       comment: loadingRoast ? "⏱️ COMPILING_DYNAMIC_JURY_ROAST_MANIFEST.EXE..." : (aiRoast || leadFb.comment),
       highlight: leadFb.highlight,
@@ -334,6 +348,7 @@ export default function ResultScreen() {
             judgeId: fb.judgeId,
             name: jProfile.name,
             avatar: jProfile.avatar,
+            avatarImage: jProfile.avatarImage,
             score: fb.score,
             comment: fb.comment,
             highlight: fb.highlight,
@@ -377,6 +392,7 @@ export default function ResultScreen() {
           judgeId: j.id,
           name: j.name,
           avatar: j.avatar,
+          avatarImage: j.avatarImage,
           score: judgeScore,
           comment: fbResult.comment,
           highlight: fbResult.highlight || "Valid architectural execution.",
@@ -509,8 +525,23 @@ export default function ResultScreen() {
               )}
 
               {/* Judge header */}
-              <div className="flex items-center gap-2 pr-10">
-                <span className="text-2xl">{fb.avatar}</span>
+              <div className="flex items-center gap-2.5 pr-10">
+                {/* Avatar photo or emoji fallback */}
+                <div className="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-full ring-1 ring-white/10">
+                  {fb.avatarImage ? (
+                    <Image
+                      src={fb.avatarImage}
+                      alt={fb.name}
+                      fill
+                      className="object-cover object-top"
+                      sizes="40px"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-white/5 text-lg">
+                      {fb.avatar}
+                    </div>
+                  )}
+                </div>
                 <div>
                   <p className="text-xs font-semibold text-foreground leading-tight">{fb.name}</p>
                   <p className="font-mono text-[10px] text-muted-foreground">

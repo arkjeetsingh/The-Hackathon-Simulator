@@ -4,14 +4,12 @@
  * @file JudgeWheel — Animated judge showcase / carousel
  * @description Displays all judges in a horizontal row with staggered entrance
  * animations. The active judge is highlighted with a purple glow and slight
- * elevation. Each card shows avatar, name, title, expertise badges,
+ * elevation. Each card shows avatar portrait, name, title, expertise badges,
  * personality, and scoring-weight mini-bars.
- *
- * TODO: Add a spinning wheel selection animation for dramatic judge reveal.
- * TODO: Connect active judge to Zustand currentJudge state.
  */
 
-import { motion } from 'framer-motion';
+import Image from 'next/image';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { JUDGES } from '@/data/judges';
 import { useGameStore } from '@/store/gameStore';
@@ -40,17 +38,17 @@ const WEIGHT_LABELS: { key: keyof typeof JUDGES[0]['scoringWeights']; label: str
 const containerVariants = {
   hidden: {},
   show: {
-    transition: { staggerChildren: 0.12 },
+    transition: { staggerChildren: 0.1 },
   },
 };
 
 const cardVariants = {
-  hidden: { opacity: 0, y: 30, scale: 0.95 },
+  hidden: { opacity: 0, y: 24, scale: 0.96 },
   show: {
     opacity: 1,
     y: 0,
     scale: 1,
-    transition: { duration: 0.5, ease: 'easeOut' as const },
+    transition: { duration: 0.45, ease: 'easeOut' as const },
   },
 };
 
@@ -60,7 +58,7 @@ export default function JudgeWheel() {
   const currentJudge = useGameStore((s) => s.currentJudge);
 
   return (
-    <div className="flex flex-col items-center gap-6 px-4 py-10">
+    <div className="flex flex-col items-center gap-8 px-4 py-10">
       {/* Heading */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
@@ -81,7 +79,7 @@ export default function JudgeWheel() {
         variants={containerVariants}
         initial="hidden"
         animate="show"
-        className="flex w-full max-w-5xl gap-4 overflow-x-auto pb-4 sm:justify-center"
+        className="flex w-full max-w-6xl gap-4 overflow-x-auto pb-4 sm:justify-center"
       >
         {JUDGES.map((judge) => {
           const isActive = currentJudge?.id === judge.id;
@@ -91,12 +89,36 @@ export default function JudgeWheel() {
               key={judge.id}
               variants={cardVariants}
               className={cn(
-                'glass-card flex min-w-[220px] flex-col items-center gap-3 p-5 transition-all duration-300',
-                isActive && 'glass-card-strong glow-purple -translate-y-1',
+                'glass-card flex min-w-[200px] flex-col items-center gap-3 p-5 transition-all duration-300 flex-shrink-0',
+                isActive && 'glass-card-strong glow-purple -translate-y-1 ring-1 ring-neon-purple/40',
               )}
             >
-              {/* Avatar */}
-              <span className="text-4xl">{judge.avatar}</span>
+              {/* Avatar Portrait */}
+              <div className={cn(
+                'relative h-24 w-24 overflow-hidden rounded-full ring-2 transition-all duration-300',
+                isActive ? 'ring-neon-purple shadow-[0_0_18px_rgba(139,92,246,0.5)]' : 'ring-white/10'
+              )}>
+                {judge.avatarImage ? (
+                  <Image
+                    src={judge.avatarImage}
+                    alt={judge.name}
+                    fill
+                    className="object-cover object-top"
+                    sizes="96px"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-white/5 text-4xl">
+                    {judge.avatar}
+                  </div>
+                )}
+              </div>
+
+              {/* Active indicator crown */}
+              {isActive && (
+                <span className="text-xs font-bold text-neon-purple uppercase tracking-widest font-mono">
+                  ★ Selected
+                </span>
+              )}
 
               {/* Name & Title */}
               <div className="text-center">
@@ -118,7 +140,7 @@ export default function JudgeWheel() {
 
               {/* Expertise tags */}
               <div className="flex flex-wrap justify-center gap-1">
-                {judge.expertise.map((e) => (
+                {judge.expertise.slice(0, 3).map((e) => (
                   <Badge
                     key={e}
                     variant="secondary"
@@ -159,6 +181,58 @@ export default function JudgeWheel() {
           );
         })}
       </motion.div>
+
+      {/* Selected Judge Spotlight — shows below the roulette when a judge is picked */}
+      <AnimatePresence mode="wait">
+        {currentJudge && (
+          <motion.div
+            key={currentJudge.id}
+            initial={{ opacity: 0, y: 16, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.97 }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+            className="flex w-full max-w-sm items-center gap-5 glass-card-strong glow-purple rounded-2xl px-6 py-4 ring-1 ring-neon-purple/30"
+          >
+            {/* Big portrait */}
+            <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-full ring-2 ring-neon-purple shadow-[0_0_20px_rgba(139,92,246,0.45)]">
+              {currentJudge.avatarImage ? (
+                <Image
+                  src={currentJudge.avatarImage}
+                  alt={currentJudge.name}
+                  fill
+                  className="object-cover object-top"
+                  sizes="80px"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-white/5 text-3xl">
+                  {currentJudge.avatar}
+                </div>
+              )}
+            </div>
+
+            {/* Info */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-neon-purple">
+                Your Judge
+              </span>
+              <p className="text-base font-bold text-foreground leading-tight">
+                {currentJudge.name}
+              </p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                {currentJudge.title}
+              </p>
+              <Badge
+                className={cn(
+                  'w-fit ring-1 text-[10px] capitalize mt-1',
+                  PERSONALITY_STYLE[currentJudge.personality],
+                )}
+              >
+                {currentJudge.personality}
+              </Badge>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
