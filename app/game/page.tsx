@@ -37,6 +37,8 @@ import {
 import type { GameStage, Problem, TechItem, Feature } from "@/types/game";
 import { CHAOS_EVENTS } from "@/data/chaosEvents";
 import { MODIFIERS } from "@/data/modifiers";
+import { generateJudgeFeedback } from "@/data/judgeComments";
+import { classifyProjectArchetype } from "@/lib/archetypes";
 import {
   playMutedClick,
   playSubtleHover,
@@ -47,7 +49,7 @@ import {
   playUnlockArpeggio
 } from "@/lib/sound";
 
-// ─── Standard Reusable Stage Wrapper ───────────────────────────────────────
+// --- Standard Reusable Stage Wrapper ---------------------------------------
 
 function GameplayStageCard({
   stageKey,
@@ -182,7 +184,7 @@ function GameplayStageCard({
   );
 }
 
-// ─── Stage 1: Difficulty Phase ─────────────────────────────────────────────
+// --- Stage 1: Difficulty Phase ---------------------------------------------
 
 function DifficultyStage() {
   const { setDifficulty, difficulty, gameMode } = useGameStore();
@@ -228,7 +230,7 @@ function DifficultyStage() {
   );
 }
 
-// ─── Stage 2: Problem Reveal Phase ──────────────────────────────────────────
+// --- Stage 2: Problem Reveal Phase ------------------------------------------
 
 function ProblemRevealStage() {
   const { selectedProblem, selectProblem } = useGameStore();
@@ -329,7 +331,7 @@ function ProblemRevealStage() {
   );
 }
 
-// ─── Stage 3: Solution Direction Phase ──────────────────────────────────────
+// --- Stage 3: Solution Direction Phase --------------------------------------
 
 function SolutionDirectionStage() {
   const { solutionDirection, setSolutionDirection, updateScore } = useGameStore();
@@ -418,7 +420,7 @@ function SolutionDirectionStage() {
   );
 }
 
-// ─── Stage 4: Tech Stack Phase ──────────────────────────────────────────────
+// --- Stage 4: Tech Stack Phase ----------------------------------------------
 
 const SLOT_CATEGORIES = [
   { id: 'frontend', label: 'Frontend Slot' },
@@ -626,7 +628,7 @@ function TechStackStage() {
   );
 }
 
-// ─── Stage 5: USP Phase ─────────────────────────────────────────────────────
+// --- Stage 5: USP Phase -----------------------------------------------------
 
 function UspStage() {
   const { usp, setUsp, updateScore } = useGameStore();
@@ -699,7 +701,7 @@ function UspStage() {
   );
 }
 
-// ─── Stage 6: Feature Prioritization Phase ──────────────────────────────────
+// --- Stage 6: Feature Prioritization Phase ----------------------------------
 
 const MOCK_BACKLOG_POOL: Feature[] = [
   { id: "feat-ai", name: "AI Assistant", description: "Secures search logs", effort: "medium", impact: "high" },
@@ -868,7 +870,7 @@ function FeaturesStage() {
   );
 }
 
-// ─── Stage 7: Mentor Phase ──────────────────────────────────────────────────
+// --- Stage 7: Mentor Phase --------------------------------------------------
 
 function MentorStage() {
   const { techStack, solutionDirection, usp, features, updateScore, activeModifiers } = useGameStore();
@@ -974,7 +976,7 @@ function MentorStage() {
   );
 }
 
-// ─── Stage 8: Business Model Phase ──────────────────────────────────────────
+// --- Stage 8: Business Model Phase ------------------------------------------
 
 function BusinessModelStage() {
   const { businessModel, setBusinessModel, selectedProblem, usp, solutionDirection, updateScore } = useGameStore();
@@ -1052,7 +1054,7 @@ function BusinessModelStage() {
   );
 }
 
-// ─── Stage 9: Pitch Prep Phase ──────────────────────────────────────────────
+// --- Stage 9: Pitch Prep Phase ----------------------------------------------
 
 function PitchPrepStage() {
   const {
@@ -1146,7 +1148,7 @@ function PitchPrepStage() {
   );
 }
 
-// ─── Stage 10: Judge Wheel ──────────────────────────────────────────────────
+// --- Stage 10: Judge Wheel --------------------------------------------------
 
 function JudgeSpinStage() {
   const { currentJudge, setCurrentJudge, judgeSpinState, setJudgeSpinState, nextStage } = useGameStore();
@@ -1298,7 +1300,7 @@ function JudgeSpinStage() {
             </div>
           )}
 
-          {judgeSpinState === "done" && currentJudge && (
+                    {judgeSpinState === "done" && currentJudge && (
             <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-md w-full text-left space-y-3">
               <div className="flex items-center gap-3">
                 <span className="text-2xl">{currentJudge.avatar}</span>
@@ -1331,7 +1333,7 @@ function JudgeSpinStage() {
   );
 }
 
-// ─── Stage 11: Dynamic Judging Engine ────────────────────────────────────────
+// --- Stage 11: Dynamic Judging Engine ----------------------------------------
 
 function JudgingStage() {
   const {
@@ -1351,32 +1353,59 @@ function JudgingStage() {
   } = useGameStore();
 
   const [loadingStep, setLoadingStep] = useState(0);
+  const [completedSteps, setCompletedSteps] = useState<string[]>([]);
   const [evaluationComplete, setEvaluationComplete] = useState(false);
 
-  const loadingLogs = [
-    "INITIATING COMPILER PIPELINE...",
-    "EXTRACTING PROJECT MANIFEST...",
-    "PARSING CHOSEN USP & TECH STACK...",
-    "RUNNING FEASIBILITY AND VALUE MULTIPLIERS...",
-    "CALCULATING SYNERGIES & MENTOR CODES...",
-    "SYNTHESIZING CRITICAL JURY SCORE MATRIX...",
-    "COMPILING FINAL REPORT..."
+  const stagedSteps = [
+    {
+      key: "architecture",
+      label: "Reviewing Architecture",
+      getLog: () => {
+        const techs = techStack.map(t => t.name).join(", ");
+        return `Scanning tech stack: [${techs || "None Selected"}]. Checking framework synergies...`;
+      }
+    },
+    {
+      key: "scope",
+      label: "Validating Scope",
+      getLog: () => {
+        const must = features.length;
+        return `Auditing prioritized backlog components. Found ${must} scoped features...`;
+      }
+    },
+    {
+      key: "business",
+      label: "Assessing Business Fit",
+      getLog: () => {
+        return `Matching positioning: "${usp || "N/A"}" combined with "${businessModel || "N/A"}" monetization...`;
+      }
+    },
+    {
+      key: "execution",
+      label: "Evaluating Execution",
+      getLog: () => {
+        return `Integrating ${currentJudge?.name || "Evaluator"}'s specialized weights and parameters...`;
+      }
+    }
   ];
 
   useEffect(() => {
     if (evaluationComplete || !currentJudge) return;
 
     let step = 0;
+    playWheelSpinClick(); // initial tick
     const interval = setInterval(() => {
-      if (step < loadingLogs.length - 1) {
+      if (step < 3) {
+        setCompletedSteps(prev => [...prev, stagedSteps[step].key]);
         step++;
         setLoadingStep(step);
-        playWheelSpinClick(); // play digital keyboard click
+        playWheelSpinClick();
       } else {
+        setCompletedSteps(["architecture", "scope", "business", "execution"]);
         clearInterval(interval);
         performEvaluation();
       }
-    }, 400);
+    }, 1200);
 
     return () => clearInterval(interval);
   }, [currentJudge]);
@@ -1443,7 +1472,6 @@ function JudgingStage() {
           }
           break;
         case "TECH_WIZARD":
-          // Double standard synergy bonus
           finalBonus += score.bonus;
           break;
         case "FAST_SHIP":
@@ -1564,44 +1592,28 @@ function JudgingStage() {
 
     const finalStrengths = derivedStrengths.slice(0, 2);
 
-    let comment = "";
-    if (finalScoreVal >= 90) {
-      comment = {
-        technical: "Brilliant engineering compile. Perfect database locks and stellar code modularity.",
-        creative: "Spectacular! This changes the narrative completely. The aesthetic flow is gorgeous.",
-        encouraging: "Outstanding work! I am incredibly proud of what you put together in such a short window.",
-        tough: "Impressive. I came in expecting code soup, but this is a exceptionally structured deployment.",
-      }[currentJudge.personality];
-    } else if (finalScoreVal >= 70) {
-      comment = {
-        technical: "Solid, viable architecture. Minor database indexing room remains, but highly functional.",
-        creative: "A strong pitch and polished style. The USP makes immediate sense for this category.",
-        encouraging: "A highly respectable submission! With a few extra hours, this could win outright.",
-        tough: "Passable. The core features compile correctly, though it lacks severe creative ambition.",
-      }[currentJudge.personality];
-    } else {
-      comment = {
-        technical: "Compile failed due to dependency gaps and scope bloat. Architecture lacks robustness.",
-        creative: "A highly confusing pitch. The features do not represent the selected business model well.",
-        encouraging: "A good attempt! Keep debugging and tweaking your frameworks. You will get there.",
-        tough: "Incomplete. Too many bloat items and a major lack of functional discipline.",
-      }[currentJudge.personality];
-    }
+    // Call our new generated feedback comments database
+    const feedbackResult = generateJudgeFeedback(currentJudge.id, finalScoreVal, {
+      techStack,
+      features,
+      usp,
+      businessModel,
+      problem: selectedProb,
+      solutionDirection,
+    });
 
     const highlight = finalStrengths[0];
 
     addJudgeFeedback({
       judgeId: currentJudge.id,
       score: finalScoreVal,
-      comment,
+      comment: feedbackResult.comment,
       highlight,
     });
 
-    // Record results and update local stats!
+    // Record results and update stats
     useGameStore.getState().updateStats(finalScoreVal);
-
     playScoreChord(); // trigger dynamic score chord!
-
     setEvaluationComplete(true);
   };
 
@@ -1616,45 +1628,69 @@ function JudgingStage() {
           <div className="p-5 bg-neutral-900 border border-neutral-800 rounded-md text-white shadow-xl space-y-4 leading-relaxed font-mono">
             <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
               <span className="text-amber-400 font-bold animate-pulse">COMPILER_EVALUATION_IN_PROGRESS</span>
-              <span className="text-neutral-500 text-[9px]">[RUNNING]</span>
+              <span className="text-neutral-500 text-[9px]">[STAGED_REVIEW]</span>
             </div>
 
-            <div className="space-y-1 text-neutral-400 text-[10px]">
-              {loadingLogs.slice(0, loadingStep + 1).map((log, i) => (
-                <div key={i} className="flex gap-2">
-                  <span className="text-neutral-600">&gt;</span>
-                  <span className={i === loadingStep ? "text-neutral-100 font-bold animate-pulse" : ""}>{log}</span>
-                </div>
-              ))}
+            <div className="space-y-3 py-1 font-mono text-[10px]">
+              {stagedSteps.map((step, idx) => {
+                const isActive = loadingStep === idx;
+                const isDone = completedSteps.includes(step.key);
+                return (
+                  <div key={step.key} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={isDone ? "text-emerald-400 font-bold" : isActive ? "text-amber-400 animate-pulse font-bold" : "text-neutral-600"}>
+                          {isDone ? "[✓]" : isActive ? "[▶]" : "[ ]"}
+                        </span>
+                        <span className={isDone ? "text-neutral-105 font-bold" : isActive ? "text-amber-300 font-bold animate-pulse" : "text-neutral-500"}>
+                          {step.label.toUpperCase()}
+                        </span>
+                      </div>
+                      <span className="text-[9px] text-neutral-500">
+                        {isDone ? "COMPLETE" : isActive ? "PARSING..." : "QUEUED"}
+                      </span>
+                    </div>
+                    {isActive && (
+                      <motion.div
+                        initial={{ opacity: 0, x: -4 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="pl-6 text-[9px] text-neutral-400 italic leading-normal"
+                      >
+                        &gt; {step.getLog()}
+                      </motion.div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
-            <div className="w-full bg-neutral-800 h-1.5 rounded-full overflow-hidden">
+            <div className="w-full bg-neutral-800 h-1 rounded-full overflow-hidden">
               <div
                 className="bg-amber-400 h-full transition-all duration-300"
-                style={{ width: `${((loadingStep + 1) / loadingLogs.length) * 100}%` }}
+                style={{ width: `${((loadingStep + 1) / 4) * 100}%` }}
               />
             </div>
           </div>
         ) : (
-          <div className="p-5 bg-neutral-50 border border-neutral-900 rounded-md shadow-sm space-y-4 leading-relaxed">
-            <div className="flex items-center gap-3 border-b border-border pb-3">
+          <div className="p-5 bg-white border border-neutral-300 rounded-md shadow-sm space-y-4 leading-relaxed">
+            <div className="flex items-center gap-3 border-b border-neutral-200 pb-3">
               <span className="text-3xl">{currentJudge?.avatar}</span>
               <div>
-                <span className="text-neutral-400 block text-[9px] uppercase">EVALUATOR:</span>
-                <span className="font-bold text-neutral-900 text-sm uppercase">{currentJudge?.name}</span>
-                <span className="text-[9px] text-muted-foreground block font-sans font-light">{currentJudge?.title}</span>
+                <span className="text-neutral-400 block text-[8px] uppercase font-bold">EVALUATOR:</span>
+                <span className="font-bold text-neutral-900 text-xs uppercase">{currentJudge?.name}</span>
+                <span className="text-[9px] text-neutral-500 block font-sans font-light">{currentJudge?.title}</span>
               </div>
             </div>
 
             <div className="space-y-2">
-              <span className="text-neutral-400 block text-[9px] uppercase">JURY_FEEDBACK_COMMENT:</span>
-              <p className="text-xs text-neutral-800 font-sans italic bg-white p-3 border border-neutral-200 rounded leading-relaxed">
+              <span className="text-neutral-400 block text-[8px] uppercase font-bold">JURY_FEEDBACK_COMMENT:</span>
+              <p className="text-[11px] text-neutral-800 font-sans italic bg-neutral-50 p-3 border border-neutral-200 rounded leading-relaxed">
                 "{judgeFeedback[judgeFeedback.length - 1]?.comment}"
               </p>
             </div>
 
             <div className="p-2.5 bg-neutral-900 border border-neutral-900 rounded text-center text-white">
-              <span className="text-[10px] text-neutral-400 block uppercase font-mono tracking-wider mb-0.5">COMPUTED_SCORE_INDEX</span>
+              <span className="text-[9px] text-neutral-400 block uppercase font-mono tracking-wider mb-0.5">COMPUTED_SCORE_INDEX</span>
               <span className="text-2xl font-black">{judgeFeedback[judgeFeedback.length - 1]?.score}/100</span>
             </div>
 
@@ -1675,7 +1711,7 @@ function JudgingStage() {
   );
 }
 
-// ─── Stage 12: Final Results & Achievements ──────────────────────────────────
+// --- Stage 12: Final Results & Achievements ----------------------------------
 
 const ACHIEVEMENTS_LIST = [
   { id: "scope-master", name: "Scope Master", desc: "Must-Have features count: 2 or 3" },
@@ -1685,7 +1721,7 @@ const ACHIEVEMENTS_LIST = [
   { id: "speed-builder", name: "Speed Builder", desc: "Choose extreme Fastest USP" },
   { id: "ai-pioneer", name: "AI Pioneer", desc: "Combine AI models with AI USP" },
   { id: "chaos-survivor", name: "Chaos Survivor", desc: "Faced >= 2 negative events & survived" },
-  { id: "frugal-founder", name: "Frugal Founder", desc: "Freemium plus Cheapest USP" },
+{ id: "frugal-founder", name: "Frugal Founder", desc: "Freemium plus Cheapest USP" },
   { id: "lean-mean", name: "Lean & Mean", desc: "2 features, small stack (<= 3 items)" },
   { id: "omniscient", name: "Omniscient", desc: "Used the mentor advisor audit" },
   { id: "crisis-manager", name: "Crisis Manager", desc: "Resolved >= 2 negative events & score >= 80" },
@@ -1728,6 +1764,14 @@ function ResultsStage() {
     return "F";
   };
   const grade = getGrade(finalScore100);
+
+  const archetype = classifyProjectArchetype({
+    techStack,
+    features,
+    usp,
+    businessModel,
+    solutionDirection,
+  });
 
   // Run achievement checks when results mount
   useEffect(() => {
@@ -1895,29 +1939,30 @@ function ResultsStage() {
   const { strengths, weaknesses } = getStrengthsAndWeaknesses();
 
   const generateAsciiCard = () => {
-    const divider = "├──────────────────────────────────────────┤";
-    const borderTop = "┌──────────────────────────────────────────┐";
-    const borderBottom = "└──────────────────────────────────────────┘";
+    const divider = "+------------------------------------------+";
+    const borderTop = divider;
+    const borderBottom = divider;
     
     const formatLine = (label: string, value: string) => {
-      const lineContent = `│ ${label}: ${value}`;
+      const lineContent = `| ${label}: ${value}`;
       const padding = 42 - lineContent.length;
-      return lineContent + " ".repeat(Math.max(0, padding)) + " │";
+      return lineContent + " ".repeat(Math.max(0, padding)) + " |";
     };
 
     return [
       borderTop,
-      formatLine("THE HACKATHON SIMULATOR", "v1.0"),
+      formatLine("THE HACKATHON SIMULATOR", "v1.2"),
       divider,
       formatLine("PROBLEM", selectedProblem?.title.toUpperCase() || "N/A"),
       formatLine("DIRECTION", (solutionDirection || "N/A").toUpperCase()),
+      formatLine("ARCHETYPE", archetype.name.toUpperCase()),
       formatLine("USP", (usp || "N/A").toUpperCase()),
       formatLine("MODEL", (businessModel || "N/A").toUpperCase()),
       divider,
       formatLine("JUDGE", (currentJudge?.name || "N/A").toUpperCase()),
       formatLine("FINAL SCORE", `${displayScore}/50 (GRADE ${grade})`),
       divider,
-      formatLine("ACHIEVEMENTS", `${unlockedAchievements.length}/10 UNLOCKED`),
+      formatLine("ACHIEVEMENTS", `${unlockedAchievements.length}/13 UNLOCKED`),
       borderBottom
     ].join("\n");
   };
@@ -1935,7 +1980,7 @@ function ResultsStage() {
     <GameplayStageCard
       stageKey="results"
       title="Hackathon Results"
-      subtitle="Jury evaluation complete. Review your scores, unlocked achievements, and copy your social share card."
+      subtitle="Jury evaluation complete. Review your archetype metrics, specialist feedback, and unlocked achievements."
     >
       <div className="max-w-2xl mx-auto text-left font-mono text-[11px] space-y-6">
         
@@ -1946,7 +1991,7 @@ function ResultsStage() {
             <span className="text-3xl font-black">{displayScore} <span className="text-xs font-normal text-neutral-400">/ 50</span></span>
           </div>
 
-          <div className="p-4 bg-neutral-50 border border-neutral-200 rounded text-center flex flex-col items-center justify-center relative overflow-hidden shadow-sm">
+          <div className="p-4 bg-white border border-neutral-200 rounded text-center flex flex-col items-center justify-center relative overflow-hidden shadow-sm">
             <span className="text-[9px] text-neutral-400 block uppercase tracking-wider mb-2">LETTER_GRADE</span>
             <motion.div
               initial={{ scale: 3.5, rotate: -35, opacity: 0 }}
@@ -1958,7 +2003,7 @@ function ResultsStage() {
             </motion.div>
           </div>
 
-          <div className="p-4 bg-neutral-50 border border-neutral-200 rounded text-center flex flex-col justify-center shadow-sm">
+          <div className="p-4 bg-white border border-neutral-200 rounded text-center flex flex-col justify-center shadow-sm">
             <span className="text-[9px] text-neutral-400 block uppercase tracking-wider mb-1">JURY_VERDICT</span>
             <span className="text-xs font-bold text-neutral-800 uppercase truncate">
               {finalScore100 >= 70 ? "✅ PROJECT APPROVED" : "❌ COMPILE FAILED"}
@@ -1966,10 +2011,75 @@ function ResultsStage() {
           </div>
         </div>
 
+        {/* Project Archetype Card */}
+        <div className="border-2 border-double border-neutral-900 p-5 bg-white space-y-4 shadow-sm select-none">
+          <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
+            <span className="text-[8px] text-neutral-400 font-bold uppercase tracking-wider">PROJECT_ARCHETYPE_CLASSIFICATION</span>
+            <span className="text-[8px] bg-neutral-900 text-white font-mono px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+              {archetype.id}
+            </span>
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-[8px] text-neutral-400 block uppercase font-mono tracking-tight leading-none font-bold">ARCHETYPE CATEGORY</span>
+            <h3 className="text-lg font-black uppercase text-neutral-900 leading-none">{archetype.name}</h3>
+            <span className="text-[10px] text-neutral-500 font-sans italic block mt-0.5">{archetype.subtitle}</span>
+          </div>
+
+          <p className="text-[11px] text-neutral-600 font-sans font-light leading-relaxed">
+            {archetype.description}
+          </p>
+
+          <div className="border-t border-dashed border-neutral-200 pt-3 space-y-2.5">
+            <span className="text-[8px] text-neutral-400 block uppercase font-bold tracking-wider mb-1">ARCHETYPE COMPILER METRICS</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5 font-mono text-[9px]">
+              <div>
+                <div className="flex justify-between mb-0.5 text-neutral-500">
+                  <span>TECHNICAL DEPTH:</span>
+                  <span className="font-bold text-neutral-900">{archetype.radarStats.techDepth}%</span>
+                </div>
+                <div className="w-full bg-neutral-100 border border-neutral-250 h-1.5 rounded-sm overflow-hidden">
+                  <div className="bg-neutral-950 h-full" style={{ width: `${archetype.radarStats.techDepth}%` }} />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between mb-0.5 text-neutral-500">
+                  <span>BUSINESS ACUTENESS:</span>
+                  <span className="font-bold text-neutral-900">{archetype.radarStats.businessAcuteness}%</span>
+                </div>
+                <div className="w-full bg-neutral-100 border border-neutral-250 h-1.5 rounded-sm overflow-hidden">
+                  <div className="bg-neutral-950 h-full" style={{ width: `${archetype.radarStats.businessAcuteness}%` }} />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between mb-0.5 text-neutral-500">
+                  <span>DESIGN FINESSE:</span>
+                  <span className="font-bold text-neutral-900">{archetype.radarStats.designFinesse}%</span>
+                </div>
+                <div className="w-full bg-neutral-100 border border-neutral-250 h-1.5 rounded-sm overflow-hidden">
+                  <div className="bg-neutral-950 h-full" style={{ width: `${archetype.radarStats.designFinesse}%` }} />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between mb-0.5 text-neutral-500">
+                  <span>SHIPPING SCRAPPINESS:</span>
+                  <span className="font-bold text-neutral-900">{archetype.radarStats.shippingScrappiness}%</span>
+                </div>
+                <div className="w-full bg-neutral-100 border border-neutral-250 h-1.5 rounded-sm overflow-hidden">
+                  <div className="bg-neutral-950 h-full" style={{ width: `${archetype.radarStats.shippingScrappiness}%` }} />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Run Summary metadata card */}
-        <div className="p-4 bg-stone-50 border border-neutral-250 rounded-md text-left font-mono text-[10px] space-y-2 select-none relative overflow-hidden">
+        <div className="p-4 bg-stone-50 border border-neutral-200 rounded text-left font-mono text-[10px] space-y-2 select-none relative overflow-hidden shadow-sm">
           <div className="absolute top-1 right-2 text-[8px] text-neutral-300 font-bold">RUN_SUMMARY_MANIFEST</div>
-          <span className="text-neutral-400 block text-[9px] uppercase border-b border-neutral-200 pb-1 mb-2 font-bold">RUN SUMMARY</span>
+          <span className="text-neutral-400 block text-[8px] uppercase border-b border-neutral-200 pb-1 mb-2 font-bold">RUN SUMMARY</span>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-2.5 text-[10px]">
             <div><span className="text-neutral-400">PLAY MODE:</span> <span className="text-neutral-900 font-bold uppercase">{gameMode}</span></div>
             <div><span className="text-neutral-400">DIFFICULTY:</span> <span className="text-neutral-900 font-bold uppercase">{difficulty || "N/A"}</span></div>
@@ -1999,12 +2109,12 @@ function ResultsStage() {
         </div>
 
         {/* Strengths & Weaknesses */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-dashed border-border pt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-dashed border-neutral-200 pt-4">
           <div className="space-y-2">
             <span className="text-emerald-600 block text-[9px] uppercase font-bold">+++ PROJECT_STRENGTHS:</span>
             <ul className="space-y-1.5">
               {strengths.map((str, idx) => (
-                <li key={idx} className="flex gap-2 text-neutral-850 font-sans font-light text-[11px]">
+                <li key={idx} className="flex gap-2 text-neutral-800 font-sans font-light text-[11px]">
                   <span className="text-emerald-600 font-mono text-[9px] mt-0.5">[+]</span>
                   <span>{str}</span>
                 </li>
@@ -2016,7 +2126,7 @@ function ResultsStage() {
             <span className="text-rose-600 block text-[9px] uppercase font-bold">--- PROJECT_WEAKNESSES:</span>
             <ul className="space-y-1.5">
               {weaknesses.map((wk, idx) => (
-                <li key={idx} className="flex gap-2 text-neutral-850 font-sans font-light text-[11px]">
+                <li key={idx} className="flex gap-2 text-neutral-800 font-sans font-light text-[11px]">
                   <span className="text-rose-600 font-mono text-[9px] mt-0.5">[-]</span>
                   <span>{wk}</span>
                 </li>
@@ -2025,24 +2135,34 @@ function ResultsStage() {
           </div>
         </div>
 
-        {/* Judge Verdict Comment */}
+        {/* Judge Quote of the Run Card */}
         {currentJudge && (
-          <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-md space-y-2 border-l-4 border-l-neutral-900">
-            <div className="flex items-center gap-2">
-              <span className="text-xl">{currentJudge.avatar}</span>
-              <div>
-                <span className="text-neutral-500 text-[8px] block uppercase leading-none font-bold">JURY_REASONING_MEMO</span>
-                <span className="font-bold text-neutral-900 text-[10px] uppercase">{currentJudge.name}</span>
-              </div>
+          <div className="p-5 bg-neutral-50 border border-neutral-300 rounded-md relative select-none shadow-[0_1px_3px_rgba(0,0,0,0.015)] overflow-hidden space-y-4">
+            <div className="absolute -top-3 -right-2 text-7xl text-neutral-200/50 font-serif pointer-events-none select-none">
+              "
             </div>
-            <p className="text-xs text-neutral-800 font-sans italic pt-1 leading-relaxed">
+            
+            <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
+              <span className="text-[8px] text-neutral-400 font-bold uppercase tracking-wider">JURY_QUOTE_OF_THE_RUN</span>
+              <span className="text-[8px] font-sans text-neutral-500 uppercase font-bold">MEMO // {currentJudge.personality}</span>
+            </div>
+
+            <p className="text-xs text-neutral-850 font-sans italic relative z-10 leading-relaxed pt-1 select-text">
               "{feedback?.comment}"
             </p>
+
+            <div className="flex items-center gap-2.5 pt-2 border-t border-dashed border-neutral-200">
+              <span className="text-2xl">{currentJudge.avatar}</span>
+              <div>
+                <span className="font-bold text-neutral-900 text-[10px] uppercase block leading-none mb-1">{currentJudge.name}</span>
+                <span className="text-[8px] text-neutral-500 font-sans font-light block leading-none">{currentJudge.title}</span>
+              </div>
+            </div>
           </div>
         )}
 
         {/* Achievements Grid */}
-        <div className="border-t border-dashed border-border pt-4">
+        <div className="border-t border-dashed border-neutral-200 pt-4">
           <span className="text-neutral-400 block text-[9px] uppercase mb-3">GLOBAL_ACHIEVEMENTS_DECRYPTION:</span>
           <motion.div
             variants={{
@@ -2070,7 +2190,7 @@ function ResultsStage() {
                   className={`p-2.5 rounded border flex items-center justify-between transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(0,0,0,0.03)] ${
                     isUnlocked
                       ? "border-neutral-900 bg-neutral-900 text-white font-bold"
-                      : "border-neutral-200 bg-white text-neutral-400 border-dashed"
+                      : "border-neutral-250 bg-white text-neutral-400 border-dashed"
                   }`}
                 >
                   <div className="text-left">
@@ -2089,30 +2209,30 @@ function ResultsStage() {
         </div>
 
         {/* Shareable Result Card */}
-        <div className="border-t border-dashed border-border pt-4 space-y-2">
+        <div className="border-t border-dashed border-neutral-200 pt-4 space-y-2">
           <span className="text-neutral-400 block text-[9px] uppercase">SHAREABLE_SOCIAL_MANIFEST.ASCII</span>
-          <pre className="p-3 bg-neutral-900 text-neutral-100 rounded text-[9px] font-mono leading-tight text-left overflow-x-auto whitespace-pre">
+          <pre className="p-3 bg-neutral-900 text-neutral-100 rounded text-[9px] font-mono leading-tight text-left overflow-x-auto whitespace-pre select-all">
             {generateAsciiCard()}
           </pre>
           <Button
             onClick={copyToClipboard}
             onMouseEnter={playSubtleHover}
             variant="outline"
-            className="w-full font-mono text-xs border border-neutral-900 h-8 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:outline-none focus:outline-none"
+            className="w-full font-mono text-xs border border-neutral-900 h-8 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:outline-none focus:outline-none cursor-pointer"
           >
             {copied ? "[MANIFEST_COPIED_TO_CLIPBOARD.TXT]" : "COPY_MANIFEST_ASCII.EXE"}
           </Button>
         </div>
 
         {/* Action Controls */}
-        <div className="border-t border-border pt-4">
+        <div className="border-t border-neutral-200 pt-4">
           <Button
             onClick={() => {
               playMutedClick();
               resetGame();
             }}
             onMouseEnter={playSubtleHover}
-            className="w-full font-mono text-xs border border-neutral-900 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:outline-none focus:outline-none"
+            className="w-full font-mono text-xs border border-neutral-900 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:outline-none focus:outline-none cursor-pointer animate-pulse"
           >
             🔄 REBOOT_SIMULATOR.EXE
           </Button>
@@ -2251,7 +2371,7 @@ function DevDebugPanel() {
   );
 }
 
-// ─── Chaos Event Interruption Modal ──────────────────────────────────────────
+// --- Chaos Event Interruption Modal ------------------------------------------
 
 function ChaosEventOverlay() {
   const { activeChaosEvent, resolveChaosEvent } = useGameStore();
@@ -2378,7 +2498,7 @@ function ChaosEventOverlay() {
   );
 }
 
-// ─── Main Conditional Stage Orchestrator / GamePage ───────────────────────────
+// --- Main Conditional Stage Orchestrator / GamePage ---------------------------
 
 export default function GamePage() {
   const { stage, isGameStarted, startGame, tickTimer, isTimerPaused, activeChaosEvent } = useGameStore();
