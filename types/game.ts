@@ -234,6 +234,14 @@ export interface GameState {
   activeChaosEvent: ChaosEvent | null;
   /** History list of event IDs triggered this run */
   chaosHistory: string[];
+  /** Active game mode */
+  gameMode: 'classic' | 'daily' | 'speedrun' | 'chaos' | 'hardcore';
+  /** List of active special modifiers in this run */
+  activeModifiers: string[];
+  /** The daily modifier active today, or null */
+  dailyModifier: string | null;
+  /** Persisted stats for all historical runs */
+  stats: GameStats;
 }
 
 /** Actions the player (or system) can dispatch to mutate game state */
@@ -242,6 +250,12 @@ export interface GameActions {
   startGame: () => void;
   /** Set chosen difficulty and initialize timer */
   setDifficulty: (difficulty: 'easy' | 'medium' | 'hard' | 'dev') => void;
+  /** Change the active game mode */
+  setGameMode: (mode: 'classic' | 'daily' | 'speedrun' | 'chaos' | 'hardcore') => void;
+  /** Seed and initialize the Daily Challenge state */
+  initializeDailyChallenge: () => void;
+  /** Record results and update local stats at end of run */
+  updateStats: (finalScore: number) => void;
   
   /** Advance to the next game stage */
   nextStage: () => void;
@@ -325,4 +339,17 @@ export interface ChaosEvent {
   category: 'technical' | 'team' | 'lucky' | 'judge';
   weight: number; // for weighted random selections
   choices: ChaosEventChoice[];
+}
+
+export interface GameStats {
+  totalRuns: number;
+  bestScore: number;
+  averageScore: number;
+  favoriteStack: string[];
+  chaosSurvivalRate: number; // percentage
+  judgeWinRate: number; // percentage
+  chaosRunsFaced: number;
+  chaosRunsSurvived: number;
+  judgeWins: number;
+  techUsage: Record<string, number>;
 }

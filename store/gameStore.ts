@@ -27,8 +27,10 @@ import type {
   JudgeFeedback,
   ScoreBreakdown,
   ChaosEvent,
+  GameStats,
 } from '@/types/game';
-import { getRandomChaosEvent } from '@/data/chaosEvents';
+import { getRandomChaosEvent, CHAOS_EVENTS } from '@/data/chaosEvents';
+import { getDailyChallenge } from '@/lib/dailyChallenge';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -103,6 +105,19 @@ const initialScore: ScoreBreakdown = {
 // Composed Initial State
 // ---------------------------------------------------------------------------
 
+const initialStats = {
+  totalRuns: 0,
+  bestScore: 0,
+  averageScore: 0,
+  favoriteStack: [] as string[],
+  chaosSurvivalRate: 0,
+  judgeWinRate: 0,
+  chaosRunsFaced: 0,
+  chaosRunsSurvived: 0,
+  judgeWins: 0,
+  techUsage: {} as Record<string, number>,
+};
+
 const initialGameState = {
   stage: 'difficulty' as GameStage,
   phase: 'PROBLEM_REVEAL' as GamePhase,
@@ -142,6 +157,10 @@ const initialGameState = {
   soundEnabled: true,
   activeChaosEvent: null as ChaosEvent | null,
   chaosHistory: [] as string[],
+  gameMode: 'classic' as 'classic' | 'daily' | 'speedrun' | 'chaos' | 'hardcore',
+  activeModifiers: [] as string[],
+  dailyModifier: null as string | null,
+  stats: initialStats,
 };
 
 // ---------------------------------------------------------------------------
@@ -169,7 +188,8 @@ export const useGameStore = create<GameState & GameActions>()(
           ),
 
         setDifficulty: (difficulty) => {
-          const seconds = DIFFICULTY_TIMERS[difficulty];
+          const isSpeedRun = get().gameMode === 'speedrun';
+          const seconds = isSpeedRun ? 180 : DIFFICULTY_TIMERS[difficulty];
           set(
             {
               difficulty,
@@ -194,20 +214,24 @@ export const useGameStore = create<GameState & GameActions>()(
             
             // Chaos Event check at transition gates (after 'problemReveal', 'techStack', 'features', 'businessModel')
             const gates: GameStage[] = ['problemReveal', 'techStack', 'features', 'businessModel'];
-            if (gates.includes(stage) && Math.random() <= 0.15) {
-              const event = getRandomChaosEvent(get().chaosHistory);
-              set(
-                {
-                  activeChaosEvent: event,
-                  isTimerPaused: true, // pause standard clock
-                  stage: next,
-                  phase: mapStageToPhase(next),
-                  isGameOver: next === 'results',
-                },
-                false,
-                'core/nextStageWithChaos'
-              );
-              return;
+            if (gates.includes(stage)) {
+              const isChaosMagnet = get().activeModifiers.includes('CHAOS_MAGNET') || get().gameMode === 'chaos';
+              const triggerChance = isChaosMagnet ? 0.35 : 0.15;
+              if (Math.random() <= triggerChance) {
+                const event = getRandomChaosEvent(get().chaosHistory);
+                set(
+                  {
+                    activeChaosEvent: event,
+                    isTimerPaused: true, // pause standard clock
+                    stage: next,
+                    phase: mapStageToPhase(next),
+                    isGameOver: next === 'results',
+                  },
+                  false,
+                  'core/nextStageWithChaos'
+                );
+                return;
+              }
             }
 
             set(
@@ -296,6 +320,7 @@ export const useGameStore = create<GameState & GameActions>()(
               ...initialGameState,
               unlockedAchievements: state.unlockedAchievements, // preserve across playthroughs
               soundEnabled: state.soundEnabled, // preserve sound preferences
+              stats: state.stats, // preserve stats
             }),
             false,
             'core/resetGame'
@@ -439,7 +464,10 @@ export const useGameStore = create<GameState & GameActions>()(
           nextScore.total = total;
 
           // Adjust time remaining
-          const timeOffset = mods.timeOffset || 0;
+          let timeOffset = mods.timeOffset || 0;
+          if (timeOffset > 0 && get().activeModifiers.includes('SOLO_DEV')) {
+            timeOffset = 0; // Solo Dev can't get teammate time boosts
+          }
           const nextTime = Math.max(0, globalTimeRemaining + timeOffset);
 
           // Pushing the event ID to chaosHistory
@@ -471,6 +499,101 @@ export const useGameStore = create<GameState & GameActions>()(
               isTimerPaused: false, // resume timer
             }, false, 'core/resolveChaosEvent');
           }
+        },
+
+        setGameMode: (mode) => {
+          let activeMods: string[] = [];
+          if (mode === 'hardcore') {
+            activeMods = ['NO_MENTOR', 'HARDCORE_JUDGE'];
+          } else if (mode === 'chaos') {
+            activeMods = ['CHAOS_MAGNET'];
+          }
+          set(
+            {
+              gameMode: mode,
+              activeModifiers: activeMods,
+              dailyModifier: null,
+            },
+            false,
+            'core/setGameMode'
+          );
+        },
+
+        initializeDailyChallenge: () => {
+          const { problem, difficulty, judge, modifier } = getDailyChallenge();
+          const seconds = DIFFICULTY_TIMERS[difficulty];
+          set(
+            {
+              gameMode: 'daily',
+              activeModifiers: [modifier.id],
+              dailyModifier: modifier.id,
+              selectedProblem: problem,
+              difficulty,
+              currentJudge: judge,
+              globalTotalTime: seconds,
+              globalTimeRemaining: seconds,
+              timeRemaining: seconds,
+              totalTime: seconds,
+              isTimerPaused: false,
+              isGameStarted: true,
+              stage: 'solutionDirection',
+              phase: mapStageToPhase('solutionDirection'),
+            },
+            false,
+            'core/initializeDailyChallenge'
+          );
+        },
+
+        updateStats: (finalScore) => {
+          const { stats, techStack, chaosHistory } = get();
+          const totalRuns = stats.totalRuns + 1;
+          const bestScore = Math.max(stats.bestScore, finalScore);
+          const averageScore = Math.round(((stats.averageScore * stats.totalRuns + finalScore) / totalRuns) * 10) / 10;
+          
+          const nextTechUsage = { ...stats.techUsage };
+          techStack.forEach((t) => {
+            nextTechUsage[t.id] = (nextTechUsage[t.id] || 0) + 1;
+          });
+
+          const sortedTechIds = Object.entries(nextTechUsage)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3)
+            .map(([id]) => id);
+
+          const facedNegCount = CHAOS_EVENTS.filter(
+            (e) => chaosHistory.includes(e.id) && (e.category === 'technical' || e.category === 'team')
+          ).length;
+
+          let chaosRunsFaced = stats.chaosRunsFaced;
+          let chaosRunsSurvived = stats.chaosRunsSurvived;
+          if (facedNegCount >= 2) {
+            chaosRunsFaced += 1;
+            if (finalScore >= 70) {
+              chaosRunsSurvived += 1;
+            }
+          }
+          const chaosSurvivalRate = chaosRunsFaced > 0 ? Math.round((chaosRunsSurvived / chaosRunsFaced) * 100) : 0;
+
+          let judgeWins = stats.judgeWins;
+          if (finalScore >= 70) {
+            judgeWins += 1;
+          }
+          const judgeWinRate = totalRuns > 0 ? Math.round((judgeWins / totalRuns) * 100) : 0;
+
+          const updatedStats = {
+            totalRuns,
+            bestScore,
+            averageScore,
+            favoriteStack: sortedTechIds,
+            chaosSurvivalRate,
+            judgeWinRate,
+            chaosRunsFaced,
+            chaosRunsSurvived,
+            judgeWins,
+            techUsage: nextTechUsage,
+          };
+
+          set({ stats: updatedStats }, false, 'core/updateStats');
         },
 
         // ─── Core Game Terminate ───
@@ -511,6 +634,10 @@ export const useGameStore = create<GameState & GameActions>()(
           soundEnabled: state.soundEnabled,
           activeChaosEvent: state.activeChaosEvent,
           chaosHistory: state.chaosHistory,
+          gameMode: state.gameMode,
+          activeModifiers: state.activeModifiers,
+          dailyModifier: state.dailyModifier,
+          stats: state.stats,
         }),
       }
     ),

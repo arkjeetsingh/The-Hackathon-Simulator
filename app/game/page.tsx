@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import type { GameStage, Problem, TechItem, Feature } from "@/types/game";
 import { CHAOS_EVENTS } from "@/data/chaosEvents";
+import { MODIFIERS } from "@/data/modifiers";
 import {
   playMutedClick,
   playSubtleHover,
@@ -59,7 +60,7 @@ function GameplayStageCard({
   subtitle: string;
   children?: React.ReactNode;
 }) {
-  const { nextStage, previousStage, difficulty, globalTimeRemaining } = useGameStore();
+  const { nextStage, previousStage, difficulty, globalTimeRemaining, activeModifiers, gameMode } = useGameStore();
   const currentIndex = STAGE_ORDER.indexOf(stageKey);
 
   const formatTime = (sec: number) => {
@@ -78,10 +79,17 @@ function GameplayStageCard({
     >
       <div className="w-full bg-card border border-border rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.015)] p-6 sm:p-8 text-center relative overflow-hidden">
         {/* Stage metadata tags */}
-        <div className="flex items-center justify-between mb-6 pb-4 border-b border-border/85">
-          <span className="font-mono text-[10px] text-muted-foreground tracking-wider">
-            STAGE_{String(currentIndex + 1).padStart(2, "0")}//{stageKey.toUpperCase()}
-          </span>
+        <div className="flex items-center justify-between mb-4 pb-3 border-b border-border/85">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[10px] text-muted-foreground tracking-wider">
+              STAGE_{String(currentIndex + 1).padStart(2, "0")}//{stageKey.toUpperCase()}
+            </span>
+            {gameMode && (
+              <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-900 text-white uppercase font-bold">
+                MODE: {gameMode}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-3">
             {difficulty && (
               <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-neutral-100 border border-neutral-200 text-neutral-600 uppercase font-bold">
@@ -96,6 +104,25 @@ function GameplayStageCard({
             )}
           </div>
         </div>
+
+        {/* Modifiers List Indicators */}
+        {activeModifiers && activeModifiers.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 justify-start mb-6 text-left border-b border-dashed border-border/60 pb-3 select-none">
+            <span className="font-mono text-[9px] uppercase text-neutral-400 mr-2 self-center">ACTIVE_MODIFIERS:</span>
+            {activeModifiers.map((modId) => {
+              const mod = MODIFIERS.find((m) => m.id === modId);
+              return (
+                <span
+                  key={modId}
+                  title={mod?.description}
+                  className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-amber-50/50 border border-amber-200 text-amber-700 font-bold hover:bg-amber-100 transition-colors cursor-help"
+                >
+                  ⚠️ {mod?.name.toUpperCase()}
+                </span>
+              );
+            })}
+          </div>
+        )}
 
         <h2 className="text-2xl sm:text-3xl font-black font-sans uppercase tracking-tight text-neutral-900 mb-2">
           {title}
@@ -158,13 +185,13 @@ function GameplayStageCard({
 // ─── Stage 1: Difficulty Phase ─────────────────────────────────────────────
 
 function DifficultyStage() {
-  const { setDifficulty, difficulty } = useGameStore();
+  const { setDifficulty, difficulty, gameMode } = useGameStore();
 
   const options = [
-    { key: "easy", name: "EASY_COMPILE.EXE", desc: "10 min compile budget // 1.0x baseline modifier" },
-    { key: "medium", name: "MEDIUM_COMPILE.EXE", desc: "7 min compile budget // 1.15x efficiency multiplier" },
-    { key: "hard", name: "HARD_COMPILE.EXE", desc: "5 min compile budget // 1.30x structural speed multiplier" },
-    { key: "dev", name: "DEV_DEBUG.SH", desc: "60 seconds compile budget // 1.00x test build modifier" },
+    { key: "easy", name: "EASY_COMPILE.EXE", desc: gameMode === 'speedrun' ? "3 min speedrun budget // 1.0x baseline modifier" : "10 min compile budget // 1.0x baseline modifier" },
+    { key: "medium", name: "MEDIUM_COMPILE.EXE", desc: gameMode === 'speedrun' ? "3 min speedrun budget // 1.15x efficiency multiplier" : "7 min compile budget // 1.15x efficiency multiplier" },
+    { key: "hard", name: "HARD_COMPILE.EXE", desc: gameMode === 'speedrun' ? "3 min speedrun budget // 1.30x structural speed multiplier" : "5 min compile budget // 1.30x structural speed multiplier" },
+    { key: "dev", name: "DEV_DEBUG.SH", desc: gameMode === 'speedrun' ? "3 min speedrun budget // 1.00x test build modifier" : "60 seconds compile budget // 1.00x test build modifier" },
   ] as const;
 
   return (
@@ -844,11 +871,14 @@ function FeaturesStage() {
 // ─── Stage 7: Mentor Phase ──────────────────────────────────────────────────
 
 function MentorStage() {
-  const { techStack, solutionDirection, usp, features, updateScore } = useGameStore();
+  const { techStack, solutionDirection, usp, features, updateScore, activeModifiers } = useGameStore();
   const [isConsulted, setIsConsulted] = useState(false);
   const [tips, setTips] = useState<string[]>([]);
 
+  const isMentorLocked = activeModifiers.includes("NO_MENTOR");
+
   const handleConsult = () => {
+    if (isMentorLocked) return;
     setIsConsulted(true);
 
     const generatedTips: string[] = [];
@@ -898,10 +928,14 @@ function MentorStage() {
       <div className="max-w-md mx-auto space-y-5 text-left font-mono text-[11px]">
         {!isConsulted ? (
           <div className="text-center py-6 bg-white border border-neutral-200 rounded-md shadow-sm space-y-4">
-            <span className="text-[28px]">🧠</span>
-            <h3 className="font-bold text-neutral-900 uppercase">ADVISOR_MESH_READY</h3>
+            <span className="text-[28px]">{isMentorLocked ? "🚫" : "🧠"}</span>
+            <h3 className="font-bold text-neutral-900 uppercase">
+              {isMentorLocked ? "ADVISOR_MESH_MUTED" : "ADVISOR_MESH_READY"}
+            </h3>
             <p className="text-xs text-muted-foreground max-w-xs mx-auto font-sans font-light">
-              Click below to boot the cognitive evaluator. This will analyze your active stack and backlog pipelines.
+              {isMentorLocked
+                ? "Hardcore mode has offline locked advisor panels. You must proceed strictly without reviews."
+                : "Click below to boot the cognitive evaluator. This will analyze your active stack and backlog pipelines."}
             </p>
             <Button
               onClick={() => {
@@ -909,9 +943,10 @@ function MentorStage() {
                 handleConsult();
               }}
               onMouseEnter={playSubtleHover}
+              disabled={isMentorLocked}
               className="font-mono text-xs border border-neutral-900 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:outline-none focus:outline-none"
             >
-              RUN_MENTOR_AUDIT.EXE
+              {isMentorLocked ? "MENTOR_ACCESS_MUTED" : "RUN_MENTOR_AUDIT.EXE"}
             </Button>
           </div>
         ) : (
@@ -1311,6 +1346,8 @@ function JudgingStage() {
     addJudgeFeedback,
     judgeFeedback,
     nextStage,
+    activeModifiers,
+    gameMode,
   } = useGameStore();
 
   const [loadingStep, setLoadingStep] = useState(0);
@@ -1353,24 +1390,125 @@ function JudgingStage() {
     const baseDesign = score.design;
     const basePitch = score.pitch;
 
+    let finalInnovation = baseInnovation;
+    let finalExecution = baseExecution;
+    let finalDesign = baseDesign;
+    let finalPitch = basePitch;
+    let finalBonus = score.bonus;
+
+    const techIds = new Set(techStack.map((t) => t.id));
+
+    // Evaluate Modifiers tradeoffs
+    activeModifiers.forEach((modId) => {
+      switch (modId) {
+        case "NO_AI_TOOLS":
+          if (techIds.has("tech-openai") || techIds.has("tech-gemini") || usp === "AI-powered") {
+            finalInnovation = Math.max(0, finalInnovation - 25);
+            finalExecution = Math.max(0, finalExecution - 15);
+          }
+          break;
+        case "BOOTSTRAP_ONLY":
+          if (techIds.has("tech-aws") || techIds.has("tech-postgres")) {
+            finalExecution = Math.max(0, finalExecution - 20);
+          }
+          break;
+        case "MOBILE_ONLY":
+          if (solutionDirection !== "mobile-app") {
+            finalExecution = Math.max(0, finalExecution - 25);
+          }
+          break;
+        case "WEB_ONLY":
+          if (solutionDirection !== "web-app") {
+            finalExecution = Math.max(0, finalExecution - 25);
+          }
+          break;
+        case "AI_ONLY":
+          if (solutionDirection !== "ai-solution") {
+            finalExecution = Math.max(0, finalExecution - 25);
+          }
+          break;
+        case "LIMITED_BUDGET":
+          finalExecution = Math.max(0, finalExecution - 15);
+          break;
+        case "GREEN_FIRST":
+          if (usp === "Sustainable" || businessModel === "Government Partnership") {
+            finalBonus += 15;
+          }
+          break;
+        case "USER_SENSITIVE":
+          if (finalDesign >= 80) {
+            finalDesign = Math.min(100, finalDesign + 15);
+          } else {
+            finalDesign = Math.max(0, finalDesign - 25);
+          }
+          break;
+        case "TECH_WIZARD":
+          // Double standard synergy bonus
+          finalBonus += score.bonus;
+          break;
+        case "FAST_SHIP":
+          if (features.length > 2) {
+            finalExecution = Math.max(0, finalExecution - 20);
+          }
+          break;
+        case "NO_MENTOR":
+          if (mentorHintsUsed > 0) {
+            finalPitch = Math.max(0, finalPitch - 30);
+          }
+          break;
+        case "OPEN_SOURCE":
+          finalInnovation = Math.max(0, finalInnovation - 15);
+          break;
+        case "MONETIZE_NOW":
+          if (businessModel === "Freemium" || businessModel === "Ads") {
+            finalPitch = Math.max(0, finalPitch - 20);
+          }
+          break;
+        case "SECURITY_FIRST":
+          if (!techIds.has("tech-supabase") || !techIds.has("tech-postgres")) {
+            finalExecution = Math.max(0, finalExecution - 20);
+          }
+          break;
+        case "MINIMALIST":
+          if (features.length !== 2) {
+            finalDesign = Math.max(0, finalDesign - 15);
+          }
+          break;
+        case "CLOUD_NATIVE":
+          if (!techIds.has("tech-vercel") || !techIds.has("tech-aws")) {
+            finalInnovation = Math.max(0, finalInnovation - 15);
+          }
+          break;
+        case "ACCESSIBILITY_MANDATE":
+          finalDesign = Math.max(0, finalDesign - 15);
+          break;
+      }
+    });
+
     let weightedScore =
-      baseInnovation * weights.innovation +
-      baseExecution * weights.execution +
-      baseDesign * weights.design +
-      basePitch * weights.pitch;
+      finalInnovation * weights.innovation +
+      finalExecution * weights.execution +
+      finalDesign * weights.design +
+      finalPitch * weights.pitch;
 
     if (currentJudge.id === "judge-chaos") {
       const chaosOffset = Math.floor(Math.random() * 41) - 20; // -20 to +20
       weightedScore += chaosOffset;
     }
 
-    let finalScoreVal = weightedScore + score.bonus;
+    let finalScoreVal = weightedScore + finalBonus;
+
+    // Hardcore judging penalty (multiplier 0.85)
+    const isHardcore = activeModifiers.includes("HARDCORE_JUDGE") || gameMode === "hardcore";
+    if (isHardcore) {
+      finalScoreVal = finalScoreVal * 0.85;
+    }
+
     finalScoreVal = Math.max(0, Math.min(finalScoreVal, 100));
 
     const derivedStrengths: string[] = [];
     const derivedWeaknesses: string[] = [];
 
-    const techIds = new Set(techStack.map((t) => t.id));
     if (techIds.has("tech-next") && techIds.has("tech-vercel")) {
       derivedStrengths.push("Excellent Next.js + Vercel deployment infrastructure synergy.");
     }
@@ -1458,6 +1596,10 @@ function JudgingStage() {
       comment,
       highlight,
     });
+
+    // Record results and update local stats!
+    useGameStore.getState().updateStats(finalScoreVal);
+
     playScoreChord(); // trigger dynamic score chord!
 
     setEvaluationComplete(true);
@@ -1566,6 +1708,9 @@ function ResultsStage() {
     unlockAchievement,
     resetGame,
     chaosHistory,
+    gameMode,
+    difficulty,
+    activeModifiers,
   } = useGameStore();
 
   const [copied, setCopied] = useState(false);
@@ -1818,6 +1963,38 @@ function ResultsStage() {
             <span className="text-xs font-bold text-neutral-800 uppercase truncate">
               {finalScore100 >= 70 ? "✅ PROJECT APPROVED" : "❌ COMPILE FAILED"}
             </span>
+          </div>
+        </div>
+
+        {/* Run Summary metadata card */}
+        <div className="p-4 bg-stone-50 border border-neutral-250 rounded-md text-left font-mono text-[10px] space-y-2 select-none relative overflow-hidden">
+          <div className="absolute top-1 right-2 text-[8px] text-neutral-300 font-bold">RUN_SUMMARY_MANIFEST</div>
+          <span className="text-neutral-400 block text-[9px] uppercase border-b border-neutral-200 pb-1 mb-2 font-bold">RUN SUMMARY</span>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-2.5 text-[10px]">
+            <div><span className="text-neutral-400">PLAY MODE:</span> <span className="text-neutral-900 font-bold uppercase">{gameMode}</span></div>
+            <div><span className="text-neutral-400">DIFFICULTY:</span> <span className="text-neutral-900 font-bold uppercase">{difficulty || "N/A"}</span></div>
+            <div><span className="text-neutral-400">CHAOS EVENTS:</span> <span className="text-neutral-900 font-bold uppercase">
+              {CHAOS_EVENTS.filter((e) => chaosHistory.includes(e.id) && (e.category === "technical" || e.category === "team")).length}
+            </span></div>
+            <div><span className="text-neutral-400">MENTOR USED:</span> <span className="text-neutral-900 font-bold uppercase">{mentorHintsUsed > 0 ? "YES" : "NO"}</span></div>
+            <div><span className="text-neutral-400">JURY EVALUATOR:</span> <span className="text-neutral-900 font-bold uppercase">{currentJudge?.name || "N/A"}</span></div>
+            <div>
+              <span className="text-neutral-400 block">ACTIVE MODIFIERS:</span>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {activeModifiers && activeModifiers.length > 0 ? (
+                  activeModifiers.map((modId) => {
+                    const mod = MODIFIERS.find(m => m.id === modId);
+                    return (
+                      <span key={modId} className="bg-white border border-neutral-250 px-1 py-0.5 rounded text-[8px] uppercase text-neutral-600 font-bold">
+                        {mod?.name || modId}
+                      </span>
+                    );
+                  })
+                ) : (
+                  <span className="text-neutral-400 italic">[NONE]</span>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
