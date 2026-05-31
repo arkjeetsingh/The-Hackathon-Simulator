@@ -76,6 +76,75 @@ const CATEGORY_NOUNS: Record<string, string[]> = {
   ]
 };
 
+const PROBLEM_NOUNS: Record<string, string[]> = {
+  'prob-learnflow': [
+    "recall study planner", "adaptive review curve", "spaced-repetition scheduler", "cognitive learning pathfinder"
+  ],
+  'prob-quizwiz': [
+    "gamified algorithm quizzer", "multiplayer novice sandbox", "interactive scoreboard compiler", "low-bandwidth quiz engine"
+  ],
+  'prob-eduscribe': [
+    "audio lecture transcriber", "semantic markdown synthesizer", "conceptual study sheet builder", "real-time transcription pipeline"
+  ],
+  'prob-codequest': [
+    "sandboxed code evaluator", "collaborative team raid maze", "multi-language coding simulator", "virtual programming arena"
+  ],
+  'prob-mindfull': [
+    "encrypted peer support hub", "autonomous crisis escalation router", "anonymous stress tracker", "HIPAA-ready mood journaler"
+  ],
+  'prob-vitalssync': [
+    "tele-health vitals dashboard", "low-connectivity telemetry logger", "50ms packet recovery tracker", "Bluetooth emergency fallback grid"
+  ],
+  'prob-pillalert': [
+    "high-readability schedule advisor", "large-typography medication calendar", "audio-guided schedule announcer", "device-shake emergency responder"
+  ],
+  'prob-curamap': [
+    "emergency bed reservation locker", "real-time dispatch coordinator", "ambulance traffic router", "transaction-safe hospital locator"
+  ],
+  'prob-paysplit': [
+    "exact currency split manager", "auditable shared ledger", "autonomous debt chain resolver", "fractional penny rounding builder"
+  ],
+  'prob-ledgerchain': [
+    "verifiable grassroots ledger", "double-entry investment auditor", "encrypted community voting vault", "transparent project ledger"
+  ],
+  'prob-microtrust': [
+    "micro-lending trust indexer", "reputation scoring trust engine", "peer-to-peer interest-free circle", "local language lending gateway"
+  ],
+  'prob-budgetbot': [
+    "monospace saving terminal", "validated input expense parser", "ASCII budget sheet visualizer", "retro command-line budgeting log"
+  ],
+  'prob-gridshare': [
+    "solar micro-grid exchange", "100ms energy transaction ledger", "weather-predictive grid optimizer", "localized electricity broker"
+  ],
+  'prob-cycleloop': [
+    "circular supply-chain tracer", "product recycling checkpoint ledger", "automated recycling QR compiler", "peer green reputation scoring engine"
+  ],
+  'prob-greentrack': [
+    "low-emissions freight router", "multi-hop carbon route optimizer", "real-time emission tracker", "green cargo packing planner"
+  ],
+  'prob-harvestapi': [
+    "soil moisture telemetry node", "resilient water pump actuator", "low-power agricultural sensor grid", "drought-warning prediction monitor"
+  ],
+  'prob-agentscribe': [
+    "multi-agent support coprocessor", "support log vector indexer", "hallucination support firewall", "autonomous support routing agent"
+  ],
+  'prob-synthetix': [
+    "cognitive speech synthesizer", "natural local dialect speaker", "offline speech cache grid", "low-latency voice generator"
+  ],
+  'prob-autoqa': [
+    "pull-request debugging agent", "structural race condition parser", "autonomous fix patch generator", "error trace analysis engine"
+  ],
+  'prob-campuroute': [
+    "offline indoor classroom navigator", "crowdsourced campus study guide", "campus coordinate mesh router", "dorm-level classroom seat tracker"
+  ],
+  'prob-dormsync': [
+    "dorm laundry queue manager", "peak laundry load scheduler", "campus laundry wait tracker", "laundry solar callback loop"
+  ],
+  'prob-classpass': [
+    "library zone check-in manager", "dynamic desk reservation locker", "ambient study noise indexer", "spatial library checkout system"
+  ]
+};
+
 // ─── USP Generator ──────────────────────────────────────────────────────────
 
 /**
@@ -92,7 +161,8 @@ export function generateUSPOptions(
   const rand = createSeededRandom(seed);
 
   const category = problem?.category || "ai";
-  const nouns = CATEGORY_NOUNS[category] || CATEGORY_NOUNS.ai;
+  const problemId = problem?.id || "";
+  const nouns = PROBLEM_NOUNS[problemId] || CATEGORY_NOUNS[category] || CATEGORY_NOUNS.ai;
 
   const baseTemplates = [
     {
@@ -162,26 +232,26 @@ export function generateUSPOptions(
     let challenges = "No additional challenges detected.";
 
     if (tpl.key === "Fastest") {
-      advantages = "Lightning-fast initial build speed.";
-      challenges = "May lack deep customized innovation.";
+      advantages = `Lightning-fast initial build speed for the ${noun.toLowerCase()} modules.`;
+      challenges = `May lack deep customized innovation features specifically needed for the ${problem?.title || "scenario"}.`;
     } else if (tpl.key === "Cheapest") {
-      advantages = "Extremely low operational cloud overhead.";
-      challenges = "Not suitable for complex server-side data calculations.";
+      advantages = `Extremely low operational cloud overhead with no database hosting fees for the ${noun.toLowerCase()}.`;
+      challenges = "Not suitable for complex, real-time server-side data calculations.";
     } else if (tpl.key === "Most Scalable") {
-      advantages = "Excellent concurrency handling.";
-      challenges = "Higher technical setup feasibility requirements.";
+      advantages = `Excellent concurrency handling to manage high traffic volumes on the ${noun.toLowerCase()}.`;
+      challenges = "Higher technical setup feasibility and data synchronization requirements.";
     } else if (tpl.key === "AI-powered") {
-      advantages = "Highly differentiated, high innovation factor.";
-      challenges = "Increased execution difficulty and slower build pacing.";
+      advantages = `Highly differentiated, leveraging LLM capabilities to drive the ${noun.toLowerCase()}.`;
+      challenges = "Increased execution difficulty, complex prompt tuning, and slower initial prototype build speed.";
     } else if (tpl.key === "Sustainable") {
-      advantages = "Strong environmental impact storytelling.";
-      challenges = "Relies on external tracking API availability.";
+      advantages = "Strong environmental impact story, direct appeal to green-conscious users.";
+      challenges = "Relies heavily on external carbon / energy sensor API uptime.";
     } else if (tpl.key === "Hyper-personalized") {
-      advantages = "Tailored user journeys, premium design metrics.";
-      challenges = "Requires complex client state routing.";
+      advantages = `Highly customized visual interface tailored to user preferences in the ${noun.toLowerCase()}.`;
+      challenges = "Requires complex client state management and dynamic UI routing.";
     } else if (tpl.key === "Community-first") {
-      advantages = "Powerful user-growth virality metrics.";
-      challenges = "Relies heavily on network effect density.";
+      advantages = "High growth potential through peer-to-peer virality loops.";
+      challenges = "Relies heavily on dense user volume and network effect to work effectively.";
     }
 
     return {
@@ -219,7 +289,8 @@ export function generateFeatureBacklog(
   const rand = createSeededRandom(seed);
 
   const category = problem?.category || "ai";
-  const nouns = CATEGORY_NOUNS[category] || CATEGORY_NOUNS.ai;
+  const problemId = problem?.id || "";
+  const nouns = PROBLEM_NOUNS[problemId] || CATEGORY_NOUNS[category] || CATEGORY_NOUNS.ai;
 
   // We will generate exactly 10 features:
   // - 4 Low complexity features (Base)
