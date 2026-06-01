@@ -2361,15 +2361,16 @@ export const useGameStore = create<GameState & GameActions>()(
           const uspText = state.usp || "no USP selected yet";
           const bizModel = state.businessModel || "no business model yet";
 
-          // Helper to fetch teammate by name
-          const getTeammateByName = (name: string, fallback: any) => {
-            return team.find(t => t.name.toLowerCase().includes(name.toLowerCase())) || fallback;
+          // Role-based teammate lookup helpers — always finds by role, falls back to defaultTeammate
+          const getTeammateByRole = (cat: 'backend' | 'designer' | 'frontend' | 'ai' | 'strategist' | 'pitch' | 'researcher' | 'general') => {
+            const found = team.find(t => getRoleCategory(t.role || '') === cat);
+            return found || defaultTeammate;
           };
 
-          const tanmay = getTeammateByName("Tanmay", defaultTeammate);
-          const priya = getTeammateByName("Priya", defaultTeammate);
-          const riya = getTeammateByName("Riya", defaultTeammate);
-          const anjali = getTeammateByName("Anjali", defaultTeammate);
+          const backendMate = getTeammateByRole('backend');
+          const designerMate = getTeammateByRole('designer') || getTeammateByRole('frontend');
+          const aiMate = getTeammateByRole('ai');
+          const strategistMate = getTeammateByRole('strategist');
 
           // Retrieve previous choices for context memory
           const decisions = state.teammateDecisions || [];
@@ -2415,10 +2416,10 @@ export const useGameStore = create<GameState & GameActions>()(
             if (hasRailway) hostCount++;
             if (hasVercel) hostCount++;
 
-            // 1. CONFLICTING STACKS (Node + Go + Spring Boot, or any 3 backends)
-            const backends = state.techStack.filter(t => t.category === 'Backend');
+            // 1. CONFLICTING STACKS (any 3 backends)
+            const backends = state.techStack.filter(t => t.category === 'Backend' || t.category === 'backend');
             if (backends.length >= 3 || (hasNode && hasGo && hasSpring)) {
-              messageText = "What exactly are we building here? We now have three backend philosophies competing with each other. We are overengineering again.";
+              messageText = "What exactly are we building here? We now have three backend philosophies competing with each other. We are overengineering.";
               msgType = 'disagreement';
               isSilent = false;
               debateChoices = [
@@ -2436,11 +2437,11 @@ export const useGameStore = create<GameState & GameActions>()(
                   modifiers: { execution: -12 }
                 }
               ];
-              teammateToUse = tanmay;
+              teammateToUse = backendMate;
             }
             // 2. MERN + GO
             else if (hasGo && hasNode) {
-              messageText = "Why are we introducing Go after already committing to Node.js? Are we committing to JavaScript or Go? Both is creating unnecessary complexity.";
+              messageText = "Why are we introducing Go after already committing to Node.js? Are we committing to JavaScript or Go? Both creates unnecessary complexity.";
               msgType = 'disagreement';
               isSilent = false;
               debateChoices = [
@@ -2458,11 +2459,11 @@ export const useGameStore = create<GameState & GameActions>()(
                   modifiers: { execution: -8 }
                 }
               ];
-              teammateToUse = anjali;
+              teammateToUse = backendMate;
             }
-            // 3. MULTIPLE MODEL PROVIDERS (Gemini, Claude, OpenAI)
+            // 3. MULTIPLE MODEL PROVIDERS (Gemini + OpenAI)
             else if (aiCount >= 2) {
-              messageText = `We now have ${aiCount} AI providers solving one problem. Calling this AI-powered doesn't make it useful.`;
+              messageText = `We now have ${aiCount} AI providers solving one problem. That's not AI-powered, that's over-engineered.`;
               msgType = 'warning';
               isSilent = false;
               debateChoices = [
@@ -2480,11 +2481,11 @@ export const useGameStore = create<GameState & GameActions>()(
                   modifiers: { execution: -6, bonus: 4 }
                 }
               ];
-              teammateToUse = riya;
+              teammateToUse = aiMate;
             }
-            // 4. OVER-HOSTING (Firebase, AWS, Railway, Vercel)
+            // 4. OVER-HOSTING
             else if (hostCount >= 3) {
-              messageText = "We're building a hackathon MVP, not Netflix. Firebase, AWS, Railway, and Vercel? This is over-hosting at its finest.";
+              messageText = "We're building a hackathon MVP, not Netflix. Multiple hosting platforms? This is over-engineering.";
               msgType = 'warning';
               isSilent = false;
               debateChoices = [
@@ -2502,106 +2503,28 @@ export const useGameStore = create<GameState & GameActions>()(
                   modifiers: { execution: -10 }
                 }
               ];
-              teammateToUse = tanmay;
+              teammateToUse = backendMate;
             }
-            // 5. GOOD STACKS (Next.js + Vercel + PostgreSQL + Clerk)
-            else if (hasNext && hasVercel && hasPostgres && hasClerk) {
-              messageText = "This architecture is surprisingly clean. Love the Next.js choice.";
+            // 5. CLEAN FULL STACK (Next.js + Vercel + PostgreSQL)
+            else if (hasNext && hasVercel && hasPostgres) {
+              messageText = "This architecture is surprisingly clean. Next.js + Vercel + PostgreSQL is a solid production stack.";
               msgType = 'contribution';
               isSilent = false;
-              teammateToUse = anjali;
+              teammateToUse = backendMate;
             }
             // 6. Next.js + Vercel deployment synergy
             else if (hasNext && hasVercel) {
-              messageText = "Next.js + Vercel is a visual dream. The fast deployments will save our demo. I love this stack choice.";
+              messageText = "Next.js + Vercel is a great combo. Fast deploys, instant preview URLs — judges will see a live demo without issues.";
               msgType = 'contribution';
               isSilent = false;
-              teammateToUse = priya;
+              teammateToUse = designerMate;
             }
-            // 7. Technology Replacement Option: Pusher -> Socket.io
-            else if (techNamesList.includes("pusher")) {
-              messageText = "We currently use Pusher. Socket.io would integrate better with this stack.";
-              msgType = 'suggestion';
-              isSilent = false;
-              const socketioItem = {
-                id: "store-socketio",
-                name: "Socket.io",
-                icon: "layers",
-                category: "Realtime / Messaging" as const,
-                difficulty: 2,
-                synergies: ["reg-node"]
-              };
-              debateChoices = [
-                {
-                  label: "Replace",
-                  description: "Replace Pusher with Socket.io for local backend integration.",
-                  outcomeText: "Replaced Pusher realtime messaging with Socket.io.",
-                  modifiers: { execution: 8, innovation: 4 },
-                  action: {
-                    type: 'replace_tech_directly',
-                    payload: {
-                      removeName: 'Pusher',
-                      addTech: socketioItem
-                    }
-                  }
-                },
-                {
-                  label: "Ignore",
-                  description: "Retain Pusher SaaS integration.",
-                  outcomeText: "Proceeded with Pusher realtime messaging.",
-                  modifiers: { execution: 2 }
-                }
-              ];
-              teammateToUse = anjali;
-            }
-            // 8. Technology Addition: Anjali suggests tRPC
-            else if (hasNext && hasClerk && !techNamesList.includes("trpc")) {
-              messageText = "We already have Next.js and Clerk. Adding tRPC would keep our API layer type-safe.";
-              msgType = 'suggestion';
-              isSilent = false;
-              const trpcItem = {
-                id: "store-trpc",
-                name: "tRPC",
-                icon: "layers",
-                category: "Backend" as const,
-                difficulty: 2,
-                synergies: ["reg-next"]
-              };
-              debateChoices = [
-                {
-                  label: "Apply Addition",
-                  description: "Add tRPC to ensure type-safe endpoints.",
-                  outcomeText: "tRPC added to architecture.",
-                  modifiers: { execution: 10, design: 2 },
-                  action: {
-                    type: 'add_tech_directly',
-                    payload: {
-                      techItem: trpcItem
-                    }
-                  }
-                },
-                {
-                  label: "Ignore",
-                  description: "Stick with native Next.js API routes.",
-                  outcomeText: "Proceeded with native Next.js API routing.",
-                  modifiers: { execution: 4 }
-                }
-              ];
-              teammateToUse = anjali;
-            }
-            // Normal tech add reaction
+            // 7. Normal tech add reaction — only available-pool techs, no external suggestions
             else {
-              const p = tanmay.personality;
-              if (p === 'Builder') {
-                messageText = `${addedTech.name} is added. Let's write the code and ship it.`;
-              } else if (p === 'Perfectionist') {
-                messageText = `${addedTech.name} is added. It works, but the codebase setup still feels messy.`;
-              } else {
-                messageText = `${addedTech.name} is added. Sure, but who is paying for the server hosting?`;
-              }
+              messageText = `${addedTech.name} added to the stack. Let's make sure we integrate it properly before the demo.`;
               msgType = 'info';
               isSilent = true;
-              teammateToUse = tanmay;
+              teammateToUse = backendMate;
             }
           } else if (event === 'tech_remove') {
             const removedTech = payload as TechItem;
@@ -2609,7 +2532,7 @@ export const useGameStore = create<GameState & GameActions>()(
             messageText = `Removed ${removedTech.name} from the stack. Simplifying our dev setup should help with feasibility.`;
             msgType = 'info';
             isSilent = true;
-            teammateToUse = tanmay;
+            teammateToUse = backendMate;
           } else if (event === 'backlog_change') {
             const highEffort = state.features.filter(f => f.effort === 'high');
             if (highEffort.length >= 2) {
@@ -2631,26 +2554,19 @@ export const useGameStore = create<GameState & GameActions>()(
                   modifiers: { execution: -10 }
                 }
               ];
-              teammateToUse = priya;
+              teammateToUse = designerMate;
             } else {
-              const p = priya.personality;
-              if (p === 'Builder') {
-                messageText = `Backlog updated. Let's write the code and ship it.`;
-              } else if (p === 'Perfectionist') {
-                messageText = `Backlog updated. I hope we aren't rushing this. It still feels messy.`;
-              } else {
-                messageText = `Backlog updated. We have ${state.features.length} features prioritized.`;
-              }
+              messageText = `Backlog updated. We have ${state.features.length} features prioritized. Let's make sure we can actually ship all of them.`;
               msgType = 'info';
               isSilent = true;
-              teammateToUse = priya;
+              teammateToUse = designerMate;
             }
           } else if (event === 'usp_change') {
             const jargonTerms = ["decentralized", "consensus", "orchestration", "multi-threaded", "cryptographic", "microservices", "scalable"];
             const isJargon = jargonTerms.some(term => uspText.toLowerCase().includes(term)) || uspText.length > 50;
 
             if (isJargon) {
-              messageText = `This USP sounds technical. A judge won't understand it in 10 seconds. This sounds confusing. Let's simplify the landing page messaging.`;
+              messageText = `This USP sounds too technical. A judge won't understand it in 10 seconds. Let's simplify the messaging.`;
               msgType = 'disagreement';
               isSilent = false;
               debateChoices = [
@@ -2668,10 +2584,10 @@ export const useGameStore = create<GameState & GameActions>()(
                   modifiers: { innovation: 8, pitch: -6 }
                 }
               ];
-              teammateToUse = priya;
+              teammateToUse = designerMate;
             } else {
-              const memoryPhrase = hasPreviouslyAcceptedUX ? "Looks like Priya was right about simplifying. " : "";
-              messageText = `${memoryPhrase}That's actually a really clever USP. I love this direction. It could help us stand out in front of the judges.`;
+              const memoryPhrase = hasPreviouslyAcceptedUX ? "Looks like the simplification worked! " : "";
+              messageText = `${memoryPhrase}That's a really clever USP. This could help us stand out in front of the judges.`;
               msgType = 'contribution';
               isSilent = false;
               debateChoices = [
@@ -2689,11 +2605,11 @@ export const useGameStore = create<GameState & GameActions>()(
                   modifiers: { pitch: -2 }
                 }
               ];
-              teammateToUse = anjali;
+              teammateToUse = strategistMate;
             }
           } else if (event === 'biz_model_change') {
             if (state.businessModel?.toLowerCase().includes("freemium")) {
-              messageText = `Freemium tier is fine for onboarding, but who is paying for the server hosting? We should target enterprise scale corporate licensing.`;
+              messageText = `Freemium is fine for onboarding, but we need to show a clear path to revenue. Who is paying for the server hosting?`;
               msgType = 'disagreement';
               isSilent = false;
               debateChoices = [
@@ -2711,7 +2627,7 @@ export const useGameStore = create<GameState & GameActions>()(
                   modifiers: { innovation: 6 }
                 }
               ];
-              teammateToUse = anjali;
+              teammateToUse = strategistMate;
             } else {
               messageText = `We are discussing our monetization strategy. Enterprise B2B SaaS targeting corporate clients seems high margin. Should we lock it in?`;
               msgType = 'suggestion';
@@ -2732,7 +2648,7 @@ export const useGameStore = create<GameState & GameActions>()(
                   action: { type: 'freemium_first' }
                 }
               ];
-              teammateToUse = anjali;
+              teammateToUse = strategistMate;
             }
           } else if (event === 'mentor_advice') {
             const advice = payload as AdvisorAdvice;
@@ -2755,7 +2671,7 @@ export const useGameStore = create<GameState & GameActions>()(
                 modifiers: { bonus: -2 }
               }
             ];
-            teammateToUse = riya;
+            teammateToUse = aiMate;
           } else if (event === 'teammate_advice') {
             // Use the teammate who just gave the advice (passed as payload)
             const advisingTeammate = payload ? team.find(t => t.id === payload) || defaultTeammate : defaultTeammate;
@@ -2789,7 +2705,7 @@ export const useGameStore = create<GameState & GameActions>()(
                   action: { type: 'upgrade_architecture_redis' }
                 }
               ];
-              teammateToUse = tanmay;
+              teammateToUse = backendMate;
             } else if (pct === 30) {
               messageText = `Only 30% time remaining. We should make sure we structure our pitch deck properly. Slide count: ${state.pitchDeck.length}.`;
               msgType = 'warning';
@@ -2810,7 +2726,7 @@ export const useGameStore = create<GameState & GameActions>()(
                   action: { type: 'focus_market' }
                 }
               ];
-              teammateToUse = priya;
+              teammateToUse = designerMate;
             } else if (pct === 10) {
               messageText = `Final stretch. 10% time remaining. Stop all coding. We need to deploy the demo and practice the pitch.`;
               msgType = 'warning';
@@ -2831,7 +2747,7 @@ export const useGameStore = create<GameState & GameActions>()(
                   action: { type: 'lock_backend_milestone' }
                 }
               ];
-              teammateToUse = anjali;
+              teammateToUse = strategistMate;
             }
 
             set({

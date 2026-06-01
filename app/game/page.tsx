@@ -5267,6 +5267,292 @@ function ProjectHealthDashboard() {
 
 // --- Main Conditional Stage Orchestrator / GamePage ---------------------------
 
+// ─── Persistent Team Panel (Left Sidebar) ────────────────────────────────────
+function PersistentTeamPanel({
+  team, playerName, playerAvatar, activeTeamTab, setActiveTeamTab,
+  teamChatMessages, unreadChatCount, activeTeammateAdvice, clearUnreadChatCount,
+  resolveTeamChatMessageChoice, useTeammateHelp, stage, state, getMessageTypeBadge
+}: any) {
+  const [isMinimized, setIsMinimized] = useState(false);
+  const { applyTeammateAdvice, rejectTeammateAdvice } = useGameStore();
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to newest message
+  useEffect(() => {
+    if (!isMinimized && activeTeamTab === 'chat') {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [teamChatMessages.length, activeTeamTab, isMinimized]);
+
+  // Auto-switch to chat tab on new unread message
+  useEffect(() => {
+    if (unreadChatCount > 0 && !isMinimized) {
+      // Only switch if not already on chat
+    }
+  }, [unreadChatCount]);
+
+  // Clear unread count when on chat tab and panel is open
+  useEffect(() => {
+    if (!isMinimized && activeTeamTab === 'chat') {
+      clearUnreadChatCount();
+    }
+  }, [isMinimized, activeTeamTab, teamChatMessages.length, clearUnreadChatCount]);
+
+  return (
+    <div
+      className={cn(
+        "fixed left-0 top-14 bottom-8 z-40 flex flex-col bg-white border-r border-neutral-200 shadow-lg font-mono select-none transition-all duration-300",
+        isMinimized ? "w-10" : "w-72"
+      )}
+    >
+      {/* Panel Header */}
+      <div className={cn(
+        "flex items-center justify-between border-b border-neutral-200 bg-neutral-950 text-white px-2 py-2 flex-shrink-0",
+        isMinimized ? "flex-col gap-2 px-1 py-3" : "flex-row"
+      )}>
+        {isMinimized ? (
+          <>
+            <span className="text-base">👥</span>
+            {unreadChatCount > 0 && (
+              <span className="text-[8px] font-bold text-red-400 bg-red-900/40 rounded px-1">{unreadChatCount}</span>
+            )}
+            <button
+              onClick={() => { playMutedClick(); setIsMinimized(false); }}
+              className="text-neutral-400 hover:text-white text-[10px] transition-colors"
+              title="Expand team panel"
+            >
+              ▶
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm">👥</span>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider block leading-none">CREW</span>
+                <span className="text-[8px] text-neutral-400 uppercase">{team.length + 1} members</span>
+              </div>
+              {unreadChatCount > 0 && (
+                <span className="text-[8px] font-bold text-white bg-red-600 rounded-full px-1.5 py-0.5 ml-1">
+                  {unreadChatCount}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => { playMutedClick(); setIsMinimized(true); }}
+              className="text-neutral-400 hover:text-white text-[10px] transition-colors"
+              title="Minimize team panel"
+            >
+              ◀
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Panel Body — hidden when minimized */}
+      {!isMinimized && (
+        <>
+          {/* Tab Selector */}
+          <div className="flex border-b border-neutral-200 flex-shrink-0">
+            <button
+              onClick={() => { playMutedClick(); setActiveTeamTab('crew'); }}
+              className={`flex-1 py-1.5 text-center text-[9px] font-bold uppercase transition-all border-b-2 ${
+                activeTeamTab === 'crew'
+                  ? 'border-neutral-900 text-neutral-900 bg-neutral-50'
+                  : 'border-transparent text-neutral-400 hover:text-neutral-900 bg-transparent'
+              }`}
+            >
+              CREW
+            </button>
+            <button
+              onClick={() => { playMutedClick(); setActiveTeamTab('chat'); }}
+              className={`flex-1 py-1.5 text-center text-[9px] font-bold uppercase transition-all border-b-2 relative ${
+                activeTeamTab === 'chat'
+                  ? 'border-neutral-900 text-neutral-900 bg-neutral-50'
+                  : 'border-transparent text-neutral-400 hover:text-neutral-900 bg-transparent'
+              }`}
+            >
+              CHAT {unreadChatCount > 0 && <span className="ml-0.5 text-red-600">●</span>}
+            </button>
+          </div>
+
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto">
+            {activeTeamTab === 'crew' ? (
+              <div className="p-2 space-y-2">
+                {/* Player Card */}
+                <div className="p-2 border border-neutral-200 rounded bg-neutral-50 space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-base">{playerAvatar}</span>
+                    <div>
+                      <span className="font-bold text-neutral-900 text-[10px] block leading-none">{playerName}</span>
+                      <span className="text-[8px] text-neutral-450 uppercase">Team Lead (You)</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Teammates */}
+                {team.map((t: any) => {
+                  const hasAdvice = !!activeTeammateAdvice[t.id];
+                  const gating = checkTeammateGating(t, state);
+                  return (
+                    <div key={t.id} className="p-2 border border-neutral-200 rounded bg-white space-y-2">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-base">{t.avatar}</span>
+                          <div>
+                            <span className="font-bold text-neutral-900 text-[10px] block leading-none">{t.name}</span>
+                            <span className="text-[8px] text-neutral-450 uppercase leading-none">{t.role}</span>
+                          </div>
+                        </div>
+                        <span className="text-[7px] font-bold px-1 py-0.5 rounded bg-neutral-100 border border-neutral-200 text-neutral-500 uppercase flex-shrink-0">
+                          {t.personality}
+                        </span>
+                      </div>
+
+                      {/* Compact contribution grid */}
+                      <div className="grid grid-cols-4 gap-0.5 border-t border-dashed border-neutral-150 pt-1 text-[7px] text-center font-bold text-neutral-500">
+                        <div>
+                          <span className="block text-neutral-400 uppercase text-[6px]">INN</span>
+                          <span className={t.contribution.innovation > 0 ? "text-purple-600" : ""}>+{t.contribution.innovation}</span>
+                        </div>
+                        <div>
+                          <span className="block text-neutral-400 uppercase text-[6px]">EXE</span>
+                          <span className={t.contribution.execution > 0 ? "text-blue-600" : ""}>+{t.contribution.execution}</span>
+                        </div>
+                        <div>
+                          <span className="block text-neutral-400 uppercase text-[6px]">DES</span>
+                          <span className={t.contribution.design > 0 ? "text-pink-600" : ""}>+{t.contribution.design}</span>
+                        </div>
+                        <div>
+                          <span className="block text-neutral-400 uppercase text-[6px]">PIT</span>
+                          <span className={t.contribution.pitch > 0 ? "text-orange-600" : ""}>+{t.contribution.pitch}</span>
+                        </div>
+                      </div>
+
+                      {/* Status + Action */}
+                      <div className="flex items-center justify-between border-t border-neutral-100 pt-1.5">
+                        {!t.helpTokenUsed ? (
+                          gating.isGated ? (
+                            <span className="text-[7px] text-neutral-400 uppercase font-mono">{getSubtleGatingStatus?.(t) || "Watching..."}</span>
+                          ) : (
+                            <Button
+                              size="xs"
+                              onClick={() => { playMutedClick(); useTeammateHelp(t.id, stage); }}
+                              disabled={hasAdvice}
+                              className="text-[8px] h-5 px-1.5 w-full border border-neutral-900 cursor-pointer disabled:opacity-50"
+                            >
+                              {hasAdvice ? "PENDING..." : "ASK ADVICE"}
+                            </Button>
+                          )
+                        ) : (
+                          <span className="text-[7px] text-neutral-400 uppercase font-mono">Token used</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-2 space-y-2">
+                {teamChatMessages.length === 0 ? (
+                  <div className="text-center py-6 text-neutral-400 text-[9px]">
+                    No messages yet.
+                  </div>
+                ) : (
+                  teamChatMessages.map((msg: any) => {
+                    const isResolved = msg.discussion?.resolved;
+                    const chosenIdx = msg.discussion?.chosenIndex;
+                    const badge = getMessageTypeBadge(msg.type);
+                    return (
+                      <div key={msg.id} className="p-2 border border-neutral-200 rounded bg-white space-y-1.5">
+                        <div className="flex items-center justify-between border-b border-dashed border-neutral-150 pb-1">
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm">{msg.senderAvatar}</span>
+                            <span className="font-bold text-neutral-900 text-[9px] uppercase leading-none">{msg.senderName}</span>
+                          </div>
+                          <span className="text-[7px] text-neutral-400 flex-shrink-0">{msg.timestamp}</span>
+                        </div>
+
+                        {badge && (
+                          <span className={cn("inline-flex items-center gap-0.5 text-[7px] font-bold px-1 py-0.5 rounded border uppercase tracking-wide", badge.bg)}>
+                            {badge.icon} {badge.label}
+                          </span>
+                        )}
+
+                        <p className="text-[9px] text-neutral-700 leading-relaxed font-sans">{msg.text}</p>
+
+                        {msg.changeSummary && (
+                          <div className="p-1.5 rounded border border-neutral-200 bg-neutral-50 font-mono text-[8px] space-y-1">
+                            <div className="font-bold text-neutral-900 uppercase text-[7px] border-b border-dashed border-neutral-200 pb-0.5">⚙ ACTION COMPLETED</div>
+                            <div>
+                              <span className="text-neutral-500 uppercase text-[6px] block">After:</span>
+                              <div className="text-emerald-700 font-bold break-all">{msg.changeSummary.after}</div>
+                            </div>
+                            {msg.changeSummary.reason && (
+                              <div className="text-neutral-500 text-[7px]">{msg.changeSummary.reason}</div>
+                            )}
+                          </div>
+                        )}
+
+                        {msg.discussion && (
+                          <div className="p-1.5 bg-neutral-50 border border-neutral-200 rounded space-y-1">
+                            <span className="text-[7px] font-bold text-neutral-500 uppercase block">
+                              {isResolved ? "✓ Resolved" : "⚡ Action Required"}
+                            </span>
+                            {isResolved && chosenIdx !== undefined && msg.discussion.choices[chosenIdx] && (
+                              <div className="text-[8px] text-neutral-600 font-sans">
+                                <span className="font-bold">{msg.discussion.choices[chosenIdx].label}:</span>{" "}
+                                {msg.discussion.choices[chosenIdx].outcomeText}
+                              </div>
+                            )}
+                            {!isResolved && (
+                              <div className="flex flex-col gap-1">
+                                {msg.discussion.choices.map((choice: any, cIdx: number) => (
+                                  <button
+                                    key={cIdx}
+                                    onClick={() => { playMutedClick(); resolveTeamChatMessageChoice(msg.id, cIdx); }}
+                                    className="text-left p-1 border border-neutral-300 rounded hover:bg-neutral-100 text-[8px] transition-all cursor-pointer font-sans"
+                                  >
+                                    <span className="font-bold text-neutral-900 block">{choice.label}</span>
+                                    <span className="text-neutral-500 text-[7px] font-light leading-tight">{choice.description}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+                {/* Auto-scroll anchor */}
+                <div ref={chatEndRef} />
+              </div>
+            )}
+          </div>
+
+          {/* Footer hint */}
+          <div className="border-t border-neutral-200 px-2 py-1.5 flex-shrink-0 bg-neutral-50">
+            <p className="text-[7px] text-neutral-400 leading-tight font-sans">
+              {activeTeamTab === 'crew'
+                ? "Teammates give advice once per hackathon."
+                : "Resolve debates to update your project strategy."
+              }
+            </p>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Persistent Team Panel helper forward ref ────────────────────────────────
+function getSubtleGatingStatus(teammate: any) {
+  // This is a module-level stub; the real impl is defined inside GamePage
+  return "Watching...";
+}
+
 function TeammateAdviceNotification() {
   const { activeTeammateAdvice, team, applyTeammateAdvice, rejectTeammateAdvice } = useGameStore();
 
@@ -5628,7 +5914,7 @@ export default function GamePage() {
     }
   };
 
-  const showTeamButton = selectedProblem && stage !== 'results' && stage !== 'teamFormation';
+  const showTeamPanel = selectedProblem && stage !== 'results' && stage !== 'teamFormation';
 
   return (
     <GameLayout>
@@ -5642,288 +5928,25 @@ export default function GamePage() {
           {activeChaosEvent && <ChaosEventOverlay />}
         </AnimatePresence>
 
-        {/* Floating Team Button */}
-        {showTeamButton && (
-          <button
-            onClick={() => {
-              playMutedClick();
-              setIsTeamDrawerOpen(true);
-            }}
-            onMouseEnter={playSubtleHover}
-            className="fixed bottom-8 left-6 z-50 flex items-center gap-1.5 px-3 py-2 rounded-md bg-neutral-950 text-white border border-neutral-850 shadow-lg text-[10px] font-bold uppercase tracking-wider hover:bg-neutral-900 transition-all cursor-pointer font-mono"
-          >
-            👥 TEAM ({team.length + 1}){unreadChatCount > 0 ? " 🔴" : ""}
-          </button>
+        {/* Persistent Left Team Panel */}
+        {showTeamPanel && (
+          <PersistentTeamPanel
+            team={team}
+            playerName={playerName}
+            playerAvatar={playerAvatar}
+            activeTeamTab={activeTeamTab}
+            setActiveTeamTab={setActiveTeamTab}
+            teamChatMessages={teamChatMessages}
+            unreadChatCount={unreadChatCount}
+            activeTeammateAdvice={activeTeammateAdvice}
+            clearUnreadChatCount={clearUnreadChatCount}
+            resolveTeamChatMessageChoice={resolveTeamChatMessageChoice}
+            useTeammateHelp={useTeammateHelp}
+            stage={stage}
+            state={state}
+            getMessageTypeBadge={getMessageTypeBadge}
+          />
         )}
-
-        {/* Team Drawer Overlay */}
-        <AnimatePresence>
-          {isTeamDrawerOpen && (
-            <div className="fixed inset-0 z-50 overflow-hidden font-mono select-none">
-              <div 
-                className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" 
-                onClick={() => setIsTeamDrawerOpen(false)}
-              />
-              <motion.div
-                initial={{ x: "100%" }}
-                animate={{ x: 0 }}
-                exit={{ x: "100%" }}
-                transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-                className="absolute right-0 top-0 bottom-0 w-full max-w-sm bg-card border-l border-neutral-350 shadow-2xl p-6 flex flex-col justify-between overflow-y-auto text-left"
-              >
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between border-b border-neutral-250 pb-3">
-                    <div>
-                      <h3 className="text-sm font-black uppercase text-neutral-900">👥 Hackathon Crew</h3>
-                      <span className="text-[9px] text-neutral-450 uppercase">Active Roster</span>
-                    </div>
-                    <button
-                      onClick={() => setIsTeamDrawerOpen(false)}
-                      className="text-neutral-455 hover:text-neutral-900 text-xs"
-                    >
-                      [CLOSE]
-                    </button>
-                  </div>
-
-                  {/* Tab Selector */}
-                  <div className="flex border-b border-neutral-300">
-                    <button
-                      onClick={() => {
-                        playMutedClick();
-                        setActiveTeamTab('crew');
-                      }}
-                      className={`flex-1 py-2 text-center text-xs font-bold uppercase transition-all border-b-2 ${
-                        activeTeamTab === 'crew'
-                          ? 'border-neutral-900 text-neutral-900 bg-neutral-50/50'
-                          : 'border-transparent text-neutral-450 hover:text-neutral-900 bg-transparent'
-                      }`}
-                    >
-                      Crew
-                    </button>
-                    <button
-                      onClick={() => {
-                        playMutedClick();
-                        setActiveTeamTab('chat');
-                      }}
-                      className={`flex-1 py-2 text-center text-xs font-bold uppercase transition-all border-b-2 relative ${
-                        activeTeamTab === 'chat'
-                          ? 'border-neutral-900 text-neutral-900 bg-neutral-50/50'
-                          : 'border-transparent text-neutral-450 hover:text-neutral-900 bg-transparent'
-                      }`}
-                    >
-                      CHAT {unreadChatCount > 0 ? "🔴" : ""}
-                    </button>
-                  </div>
-
-                  {activeTeamTab === 'crew' ? (
-                    <div className="space-y-4">
-                      {/* Player Card */}
-                      <div className="p-3 border border-neutral-300 rounded bg-neutral-50/50 space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xl">{playerAvatar}</span>
-                          <div>
-                            <span className="font-bold text-neutral-900 text-xs block leading-none">{playerName}</span>
-                            <span className="text-[9px] text-neutral-450 uppercase">Team Lead (You)</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Teammates List */}
-                      {team.map((t) => {
-                        const hasAdvice = !!activeTeammateAdvice[t.id];
-                        const gating = checkTeammateGating(t, state);
-                        return (
-                          <div key={t.id} className="p-3 border border-neutral-350 rounded bg-white space-y-2.5">
-                            <div className="flex items-start justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xl">{t.avatar}</span>
-                                <div>
-                                  <span className="font-bold text-neutral-900 text-xs block leading-none">{t.name}</span>
-                                  <span className="text-[9px] text-neutral-450 uppercase">{t.role}</span>
-                                </div>
-                              </div>
-                              <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-neutral-100 border border-neutral-200 text-neutral-500 uppercase">
-                                {t.personality}
-                              </span>
-                            </div>
-
-                            {/* Contributions Display */}
-                            <div className="grid grid-cols-4 gap-1 border-t border-dashed border-neutral-200 pt-2 text-[8px] text-center font-bold text-neutral-500">
-                              <div>
-                                <span className="block text-neutral-400 uppercase text-[6px]">Innov</span>
-                                <span className={t.contribution.innovation > 0 ? "text-purple-650" : ""}>
-                                  +{t.contribution.innovation}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="block text-neutral-400 uppercase text-[6px]">Exec</span>
-                                <span className={t.contribution.execution > 0 ? "text-blue-650" : ""}>
-                                  +{t.contribution.execution}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="block text-neutral-400 uppercase text-[6px]">Design</span>
-                                <span className={t.contribution.design > 0 ? "text-pink-650" : ""}>
-                                  +{t.contribution.design}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="block text-neutral-400 uppercase text-[6px]">Pitch</span>
-                                <span className={t.contribution.pitch > 0 ? "text-orange-600" : ""}>
-                                  +{t.contribution.pitch}
-                                </span>
-                              </div>
-                            </div>
-
-                            {!t.helpTokenUsed && (
-                              <p className={cn(
-                                "text-[9px] border rounded px-2.5 py-1.5 leading-normal mt-2 font-mono",
-                                gating.isGated 
-                                  ? "text-neutral-500 bg-neutral-50 border-neutral-250" 
-                                  : "text-emerald-700 bg-emerald-50/20 border-emerald-250"
-                              )}>
-                                <span className="font-bold">Status:</span> {gating.reason}
-                              </p>
-                            )}
-
-                            {/* Action buttons */}
-                            <div className="border-t border-neutral-100 pt-2 flex items-center justify-between">
-                              <span className="text-[9px] text-neutral-450 uppercase font-mono">
-                                {t.helpTokenUsed ? "Token Used" : (gating.isGated ? "Watching" : "READY TO REVIEW")}
-                              </span>
-                              {!t.helpTokenUsed && !gating.isGated && (
-                                <Button
-                                  size="xs"
-                                  onClick={() => {
-                                    playMutedClick();
-                                    useTeammateHelp(t.id, stage);
-                                  }}
-                                  disabled={hasAdvice}
-                                  className="text-[9px] h-6 px-2 border border-neutral-900 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:outline-none cursor-pointer"
-                                >
-                                  {hasAdvice ? "ADVICE PENDING" : "ASK FOR ADVICE"}
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-                      {teamChatMessages.length === 0 ? (
-                        <div className="text-center py-8 text-neutral-400 text-[10px]">
-                          No messages in terminal log.
-                        </div>
-                      ) : (
-                        teamChatMessages.map((msg) => {
-                          const isResolved = msg.discussion?.resolved;
-                          const chosenIdx = msg.discussion?.chosenIndex;
-                          const badge = getMessageTypeBadge(msg.type);
-                          return (
-                            <div key={msg.id} className="p-3 border border-neutral-350 rounded bg-white space-y-2.5">
-                              <div className="flex flex-col gap-1 border-b border-dashed border-neutral-200 pb-1.5">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-sm">{msg.senderAvatar}</span>
-                                    <span className="font-bold text-neutral-900 text-[10px] uppercase">
-                                      {msg.senderName}
-                                    </span>
-                                  </div>
-                                  <span className="text-[8px] text-neutral-400">{msg.timestamp}</span>
-                                </div>
-                                {badge && (
-                                  <div className="flex mt-0.5">
-                                    <span className={cn("text-[7.5px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 uppercase tracking-wider", badge.bg)}>
-                                      <span>{badge.icon}</span>
-                                      <span>{badge.label}</span>
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                              <p className="text-[10px] text-neutral-700 leading-relaxed font-sans">
-                                {msg.text}
-                              </p>
-                              
-                              {msg.changeSummary && (
-                                <div className="mt-2.5 p-2.5 rounded border border-neutral-355 bg-neutral-50 space-y-2 font-mono text-[9px] text-left">
-                                  <div className="text-[10px] font-bold text-neutral-900 uppercase tracking-wider border-b border-dashed border-neutral-250 pb-1 flex items-center gap-1">
-                                    <span>⚙️</span> TEAM ACTION COMPLETED.
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <div>
-                                      <span className="font-bold text-neutral-500 uppercase text-[8px] block">Before:</span>
-                                      <div className="pl-2 border-l border-neutral-300 text-neutral-600 font-medium break-all whitespace-pre-wrap">{msg.changeSummary.before}</div>
-                                    </div>
-                                    <div>
-                                      <span className="font-bold text-emerald-650 uppercase text-[8px] block">After:</span>
-                                      <div className="pl-2 border-l border-emerald-500 text-emerald-700 font-bold break-all whitespace-pre-wrap">{msg.changeSummary.after}</div>
-                                    </div>
-                                    {msg.changeSummary.reason && (
-                                      <div>
-                                        <span className="font-bold text-neutral-500 uppercase text-[8px] block">Reason:</span>
-                                        <div className="pl-2 text-neutral-700 font-light">{msg.changeSummary.reason}</div>
-                                      </div>
-                                    )}
-                                    <div className="text-[8px] text-neutral-450 pt-1 border-t border-dashed border-neutral-200">
-                                      Suggested by: <span className="font-bold uppercase text-neutral-600">{msg.changeSummary.senderName || msg.senderName}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-
-                              {msg.discussion && (
-                                <div className="mt-2.5 p-2.5 bg-neutral-50 border border-neutral-200 rounded space-y-2">
-                                  <span className="text-[8px] font-bold text-neutral-450 uppercase block">
-                                    {isResolved ? "▲ Discussion Resolved." : "⚡ Team Debate // Action Required"}
-                                  </span>
-                                  {isResolved && chosenIdx !== undefined && msg.discussion.choices[chosenIdx] && (
-                                    <div className="text-[9px] text-neutral-600 font-sans">
-                                      <div className="font-bold text-neutral-900 mb-0.5">
-                                        Resolution: {msg.discussion.choices[chosenIdx].label}
-                                      </div>
-                                      <p>{msg.discussion.choices[chosenIdx].outcomeText}</p>
-                                    </div>
-                                  )}
-                                  {!isResolved && (
-                                    <div className="flex flex-col gap-1.5 mt-1.5">
-                                      {msg.discussion.choices.map((choice, cIdx) => (
-                                        <button
-                                          key={cIdx}
-                                          onClick={() => {
-                                            playMutedClick();
-                                            resolveTeamChatMessageChoice(msg.id, cIdx);
-                                          }}
-                                          className="text-left p-1.5 border border-neutral-300 rounded hover:bg-neutral-100 text-[9px] transition-all cursor-pointer font-sans"
-                                        >
-                                          <span className="font-bold text-neutral-900 block">{choice.label}</span>
-                                          <span className="text-neutral-500 text-[8px] font-light block leading-tight mt-0.5">{choice.description}</span>
-                                        </button>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="border-t border-neutral-200 pt-4 mt-6">
-                  <p className="text-[9px] text-neutral-450 leading-relaxed font-sans font-light">
-                    {activeTeamTab === 'crew' 
-                      ? "Ask teammates for suggestions to optimize your project stats. Each teammate can only offer advice once per hackathon."
-                      : "Monitor live team chats and debates. Choose options to resolve discussions and update your prototype strategy."
-                    }
-                  </p>
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
 
         {/* Team Chat Moment Modal */}
         <AnimatePresence>
