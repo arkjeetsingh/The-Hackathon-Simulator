@@ -3316,6 +3316,11 @@ function JudgingStage() {
     }
   ];
 
+  // Pause the game countdown timer during the judging evaluation phase
+  useEffect(() => {
+    useGameStore.getState().pauseTimer();
+  }, []);
+
   // Run evaluation immediately on mount
   useEffect(() => {
     if (currentJudge) {
@@ -3328,6 +3333,9 @@ function JudgingStage() {
     if (!currentJudge) return;
 
     let step = 0;
+    let waitAttempts = 0;
+    const MAX_WAIT_ATTEMPTS = 3; // Wait at most 3 ticks (4.5s) on step 4
+
     playRevealTension(); // Initial suspense tick
     const interval = setInterval(() => {
       if (step < 4) {
@@ -3342,11 +3350,26 @@ function JudgingStage() {
         }, 150);
       } else {
         // Step 4 is "roast". Wait until roastText is pre-fetched and non-empty!
-        if (useGameStore.getState().roastText !== "") {
+        const latestState = useGameStore.getState();
+        const currentRoast = latestState.roastText;
+        if (currentRoast !== "") {
           setCompletedSteps(["innovation", "execution", "business", "pitch", "roast"]);
           playRevealSuccess(); // Last category checkmark sound
           clearInterval(interval);
           setEvaluationComplete(true);
+        } else {
+          waitAttempts++;
+          if (waitAttempts >= MAX_WAIT_ATTEMPTS) {
+            console.warn("Jury roast pre-fetch timed out on UI animation. Using fallback comment.");
+            const fallbackComment = latestState.judgeFeedback[latestState.judgeFeedback.length - 1]?.comment || 
+              "An interesting prototype with solid groundwork, but the lead judge decided to pass on roasting this submission.";
+            // Set the fallback comment in store so it can be displayed in results page
+            latestState.setRoastText(fallbackComment);
+            setCompletedSteps(["innovation", "execution", "business", "pitch", "roast"]);
+            playRevealSuccess(); // Last category checkmark sound
+            clearInterval(interval);
+            setEvaluationComplete(true);
+          }
         }
       }
     }, 1500);
