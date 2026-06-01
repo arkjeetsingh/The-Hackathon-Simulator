@@ -724,9 +724,12 @@ function DifficultyStage() {
 function ProblemRevealStage() {
   const { selectedProblem, selectProblem } = useGameStore();
   const [shuffling, setShuffling] = useState(false);
+  const [apiShuffleCount, setApiShuffleCount] = useState(0);
 
-  const rollRandomProblem = useCallback(() => {
+  const rollRandomProblem = useCallback(async () => {
     setShuffling(true);
+    
+    // Start rapid spinning animation using hardcoded problems
     let index = 0;
     const interval = setInterval(() => {
       index = Math.floor(Math.random() * PROBLEMS.length);
@@ -734,11 +737,46 @@ function ProblemRevealStage() {
       playWheelSpinClick();
     }, 80);
 
+    const startTime = Date.now();
+    let apiSuccess = false;
+    let generatedProblemObj: any = null;
+
+    // Call dynamic API behind the scenes if under the 3 spins limit
+    if (apiShuffleCount < 3) {
+      try {
+        const res = await fetch("/api/generate-problem", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.problem) {
+            generatedProblemObj = data.problem;
+            apiSuccess = true;
+          }
+        }
+      } catch (err) {
+        console.error("Error in background problem generation:", err);
+      }
+      setApiShuffleCount(prev => prev + 1);
+    }
+
+    // Ensure spin animation lasts at least 1.2s to feel like a proper slot machine/draw
+    const elapsed = Date.now() - startTime;
+    const remainingTime = Math.max(0, 1200 - elapsed);
+
     setTimeout(() => {
       clearInterval(interval);
+      if (apiSuccess && generatedProblemObj) {
+        selectProblem(generatedProblemObj);
+      } else {
+        // Fallback to random hardcoded problem statement
+        const finalIdx = Math.floor(Math.random() * PROBLEMS.length);
+        selectProblem(PROBLEMS[finalIdx]);
+      }
       setShuffling(false);
-    }, 1000);
-  }, [selectProblem]);
+    }, remainingTime);
+  }, [selectProblem, apiShuffleCount]);
 
   // Select problem automatically on load if none selected
   useEffect(() => {
@@ -746,6 +784,20 @@ function ProblemRevealStage() {
       rollRandomProblem();
     }
   }, [selectedProblem, rollRandomProblem]);
+
+  const getCategoryDetails = (cat?: string) => {
+    if (!cat) return { label: 'GENERAL TRACK', color: 'text-neutral-700 bg-neutral-50 border-neutral-200', icon: '🎯' };
+    const c = cat.toLowerCase();
+    if (c === 'edtech') return { label: 'Education Technology', color: 'text-pink-600 bg-pink-50 border-pink-200', icon: '🎓' };
+    if (c === 'healthtech') return { label: 'Healthcare & Wellness', color: 'text-emerald-600 bg-emerald-50 border-emerald-200', icon: '🏥' };
+    if (c === 'fintech') return { label: 'Financial Technologies', color: 'text-blue-600 bg-blue-50 border-blue-200', icon: '💳' };
+    if (c === 'sustainability') return { label: 'Clean Energy & Ecology', color: 'text-teal-600 bg-teal-50 border-teal-200', icon: '🌱' };
+    if (c === 'ai') return { label: 'Artificial Intelligence', color: 'text-purple-600 bg-purple-50 border-purple-200', icon: '🤖' };
+    if (c === 'smart-campus') return { label: 'Smart Campus Systems', color: 'text-amber-650 bg-amber-50 border-amber-200', icon: '🏫' };
+    return { label: cat.toUpperCase(), color: 'text-neutral-750 bg-neutral-50 border-neutral-200', icon: '🎯' };
+  };
+
+  const catInfo = getCategoryDetails(selectedProblem?.category);
 
   return (
     <GameplayStageCard
@@ -759,7 +811,18 @@ function ProblemRevealStage() {
           ⏱️ STATUS: READY // THE TIMER WILL START AS SOON AS YOU ACCEPT A CHALLENGE.
         </div>
 
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between">
+          <div className="font-mono text-[9px] font-bold uppercase select-none">
+            {apiShuffleCount < 3 ? (
+              <span className="text-purple-600 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded animate-pulse">
+                🤖 AI Generator: {3 - apiShuffleCount} spins left
+              </span>
+            ) : (
+              <span className="text-neutral-500 bg-neutral-100 border border-neutral-200 px-2 py-0.5 rounded">
+                📦 Archive Database Active
+              </span>
+            )}
+          </div>
           <Button
             size="xs"
             variant="outline"
@@ -784,36 +847,67 @@ function ProblemRevealStage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="p-5 rounded-md border border-neutral-200 bg-neutral-50/50 space-y-4"
+              className="p-5 rounded-md border border-neutral-300 bg-white shadow-md space-y-4 text-left font-mono"
             >
-              <div>
-                <span className="text-neutral-400">CHALLENGE:</span>{" "}
-                <span className="font-bold text-neutral-900 uppercase">{selectedProblem.title}</span>
-              </div>
-              <div>
-                <span className="text-neutral-400">TRACK:</span>{" "}
-                <span className="font-bold text-neutral-800 uppercase px-1.5 py-0.5 rounded bg-neutral-100 border border-neutral-200 text-[10px]">
-                  {selectedProblem.category}
+              {/* Category & Difficulty Row */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200 pb-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-lg">{catInfo.icon}</span>
+                  <span className={cn("font-bold text-[10px] uppercase px-2 py-0.5 rounded border tracking-wider", catInfo.color)}>
+                    {catInfo.label}
+                  </span>
+                </div>
+                <span className={cn(
+                  "font-bold text-[9px] uppercase px-1.5 py-0.5 rounded border tracking-tight",
+                  selectedProblem.difficulty === 'beginner' ? 'text-emerald-750 bg-emerald-50 border-emerald-200' :
+                  selectedProblem.difficulty === 'intermediate' ? 'text-amber-700 bg-amber-50 border-amber-200' :
+                  'text-rose-700 bg-rose-50 border-rose-200'
+                )}>
+                  {selectedProblem.difficulty} difficulty
                 </span>
               </div>
-              <p className="text-neutral-700 border-t border-dashed border-border pt-3 text-[11px] font-sans font-light">
-                {selectedProblem.description}
-              </p>
-              
-              <div className="border-t border-dashed border-border pt-3 space-y-1">
-                <span className="text-neutral-400 font-bold block text-[10px]">TRACK RULES:</span>
-                <ul className="list-disc list-inside text-neutral-700 text-[10px] space-y-1 font-sans font-light">
-                  {selectedProblem.constraints.map((c, i) => (
-                    <li key={i}>{c}</li>
-                  ))}
-                </ul>
+
+              {/* Title & Description */}
+              <div className="space-y-1.5">
+                <span className="text-[9px] text-neutral-450 uppercase block tracking-wider leading-none">CHALLENGE FOCUS:</span>
+                <h3 className="font-black text-neutral-900 text-sm tracking-wide leading-snug uppercase border-l-2 border-neutral-900 pl-2">
+                  {selectedProblem.title}
+                </h3>
+                <p className="text-neutral-750 text-[11.5px] font-sans font-light leading-relaxed pt-1.5">
+                  {selectedProblem.description}
+                </p>
               </div>
 
+              {/* Track Rules */}
+              <div className="border-t border-neutral-150 pt-3 space-y-2">
+                <span className="text-neutral-450 font-bold block text-[9.5px] tracking-wider uppercase">TRACK RULES / CONSTRAINTS:</span>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {selectedProblem.constraints.map((c, i) => (
+                    <div key={i} className="flex items-start gap-1.5 text-[10.5px] font-sans text-neutral-700 leading-normal">
+                      <span className="text-emerald-600 font-bold shrink-0">✓</span>
+                      <span>{c}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Stretch Goals */}
+              {selectedProblem.bonusObjectives && selectedProblem.bonusObjectives.length > 0 && (
+                <div className="border-t border-neutral-150 pt-3 space-y-1.5">
+                  <span className="text-neutral-450 font-bold block text-[9.5px] tracking-wider uppercase">STRETCH OBJECTIVE:</span>
+                  <div className="flex items-start gap-1.5 text-[10.5px] font-sans text-neutral-750 leading-normal">
+                    <span className="text-purple-600 font-bold shrink-0">★</span>
+                    <span className="italic">{selectedProblem.bonusObjectives[0]}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Judges Tip */}
               {selectedProblem.judgingHint && (
-                <div className="border-t border-dashed border-border pt-3">
-                  <span className="text-neutral-400 font-bold block text-[10px] mb-1">JUDGES' TIP:</span>
-                  <div className="p-2.5 rounded bg-amber-50/30 border border-amber-200/50 text-[10px] text-amber-800 font-sans font-light leading-relaxed">
-                    💡 {selectedProblem.judgingHint}
+                <div className="border-t border-neutral-150 pt-3">
+                  <span className="text-neutral-450 font-bold block text-[9.5px] tracking-wider uppercase mb-1.5">JUDGES' TIP:</span>
+                  <div className="p-3 rounded bg-amber-50/40 border border-amber-200/60 text-[10.5px] text-amber-800 font-sans font-light leading-relaxed shadow-sm">
+                    {selectedProblem.judgingHint}
                   </div>
                 </div>
               )}
