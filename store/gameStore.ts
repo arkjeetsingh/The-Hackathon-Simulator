@@ -3286,12 +3286,15 @@ export const useGameStore = create<GameState & GameActions>()(
           // Get details of what we are voting on
           let subjectTitle = "";
           let subjectDesc = "";
+          let activeUsp: any = null;
+          let activeModel: any = null;
+
           if (voteType === 'usp') {
-            const activeUsp = state.generatedUSPs.find(u => u.id === targetId || u.name === targetId || u.key === targetId) || state.generatedUSPs[0];
+            activeUsp = state.generatedUSPs.find(u => u.id === targetId || u.name === targetId || u.key === targetId) || state.generatedUSPs[0];
             subjectTitle = activeUsp ? activeUsp.name : (state.usp || state.primaryUsp || "No USP Selected");
             subjectDesc = voteAs === 'secondary' ? "Secondary USP" : "Primary USP";
           } else {
-            const activeModel = state.generatedBusinessModels.find(m => m.id === targetId || m.name === targetId) || state.generatedBusinessModels.find(m => m.id === state.businessModel) || state.generatedBusinessModels[0];
+            activeModel = state.generatedBusinessModels.find(m => m.id === targetId || m.name === targetId) || state.generatedBusinessModels.find(m => m.id === state.businessModel) || state.generatedBusinessModels[0];
             subjectTitle = activeModel ? activeModel.name : "No Business Model Selected";
             subjectDesc = "Business Model Strategy";
           }
@@ -3299,48 +3302,156 @@ export const useGameStore = create<GameState & GameActions>()(
           let yesCount = 0;
           let noCount = 0;
 
+          // ─── Evaluate if option is "very good" ───
+          let isVeryGood = false;
+          if (voteType === 'usp' && activeUsp) {
+            const avgScore = (activeUsp.innovation + activeUsp.execution + activeUsp.design + activeUsp.pitch) / 4;
+            isVeryGood = avgScore >= 75 || activeUsp.innovation >= 85 || activeUsp.execution >= 85 || activeUsp.design >= 85;
+          } else if (voteType === 'businessModel' && activeModel) {
+            const modelNameLower = activeModel.name.toLowerCase();
+            const pricingLower = activeModel.pricingStructure.toLowerCase();
+            isVeryGood = modelNameLower.includes("saas") || 
+                         modelNameLower.includes("subscription") || 
+                         pricingLower.includes("saas") || 
+                         pricingLower.includes("subscription") || 
+                         activeModel.riskLevel === 'Low';
+          }
+
           const votesList = team.map(t => {
             const cat = getRoleCategory(t.role || '');
             let vote = 'YES';
             let rationale = "";
 
-            if (voteType === 'usp') {
-              if (cat === 'backend') {
-                vote = state.techStack.length > 2 ? 'YES' : 'NO';
-                rationale = vote === 'YES' 
-                  ? "Execution feasibility looks excellent; our database structures support this value proposition cleanly!" 
-                  : "We have very few backend tools selected. Implementing this USP will require massive database overhead.";
-              } else if (cat === 'designer') {
-                vote = 'YES';
-                rationale = "User feedback strongly validates this advantage! Onboarding flow will be super simple.";
-              } else if (cat === 'ai') {
-                vote = state.techStack.some(x => x.category === 'AI / ML') ? 'YES' : 'NO';
-                rationale = vote === 'YES'
-                  ? "Excellent synergy with our Gemini API endpoints. This is a true differentiator!"
-                  : "We aren't using any AI tools. Calling this a unique advantage feels speculative.";
-              } else if (cat === 'strategist') {
-                vote = 'YES';
-                rationale = "Strong alignment. This USP sets up a very high entry barrier for competitors.";
+            if (isVeryGood) {
+              // Unanimous enthusiastic approval for outstanding options
+              vote = 'YES';
+              if (voteType === 'usp') {
+                const uspName = activeUsp ? activeUsp.key : 'this';
+                if (cat === 'backend') {
+                  rationale = `This ${uspName} strategy is pure gold! The tech feasibility is highly optimized, and it will be clean to build. Absolute YES from my end!`;
+                } else if (cat === 'designer') {
+                  rationale = `Wow, this is an incredible value proposition. It makes our onboarding and user flow feel like magic. 100% yes!`;
+                } else if (cat === 'ai') {
+                  rationale = `Extremely strong technical alignment. This is the absolute best way to utilize our stack. Let's build it!`;
+                } else if (cat === 'strategist') {
+                  rationale = `Exceptional competitive advantage! This makes our pitch deck extremely compelling to investors and judges. Full support!`;
+                } else {
+                  rationale = `This is a game-changer! Our pitch and demo will stand out so much with this. Count me in!`;
+                }
               } else {
-                vote = 'YES';
-                rationale = "Morale is high. This gives our pitch presentation a solid, memorable hook!";
+                if (cat === 'backend') {
+                  rationale = `Outstanding unit economics! Operating costs are low and deployment scaling is predictable. Easy YES!`;
+                } else if (cat === 'designer') {
+                  rationale = `Perfect! The monetization structure doesn't block or ruin the onboarding flow. Love this model!`;
+                } else if (cat === 'strategist') {
+                  rationale = `Exactly what smart investors look for in a hackathon! High growth margins and a realistic wedge market. YES!`;
+                } else {
+                  rationale = `Highly credible model. We'll sound incredibly professional explaining this on slide 8. Absolute YES!`;
+                }
               }
             } else {
-              // businessModel
-              if (cat === 'backend') {
-                vote = 'YES';
-                rationale = "Operational and hosting expenses align cleanly with this revenue framework.";
-              } else if (cat === 'designer') {
-                vote = 'YES';
-                rationale = "Frictionless flow. Charging models don't block the onboarding UX.";
-              } else if (cat === 'strategist') {
-                vote = subjectTitle.toLowerCase().includes("saas") || subjectTitle.toLowerCase().includes("subscription") ? 'YES' : 'NO';
-                rationale = vote === 'YES'
-                  ? "Outstanding unit economics! Recurring B2B revenue is exactly what judges want to see."
-                  : "A one-time transactional model has poor lifetime value (LTV). SaaS would be much more lucrative.";
+              // Standard option: dynamic split voting (Conflict)
+              // Each teammate has favorite categories based on their role:
+              if (voteType === 'usp') {
+                const key = activeUsp ? activeUsp.key : 'Fastest';
+                if (cat === 'backend') {
+                  // Prefers Fastest (high execution) and Most Scalable. Dislikes complex/AI/Personalized due to overhead.
+                  if (key === 'Fastest' || key === 'Most Scalable') {
+                    vote = 'YES';
+                    rationale = `Building a "${key}" USP means we avoid over-engineering the backend. This gives us a solid, robust prototype within the 24h deadline!`;
+                  } else {
+                    vote = 'NO';
+                    rationale = `Implementing "${key}" is highly speculative. It's going to require massive custom database schemas and complex backend state management. I'd vote no.`;
+                  }
+                } else if (cat === 'designer') {
+                  // Prefers Hyper-personalized and Community-first. Dislikes Cheapest/Fastest (too plain/raw UX).
+                  if (key === 'Hyper-personalized' || key === 'Community-first') {
+                    vote = 'YES';
+                    rationale = `Perfect! A "${key}" approach lets us showcase stunning user interfaces and dynamic screen designs that will wow the judges!`;
+                  } else {
+                    vote = 'NO';
+                    rationale = `A "${key}" focus sounds incredibly dry. It forces us to design a barebones, generic layout that won't show off any creative UX magic. Let's pass.`;
+                  }
+                } else if (cat === 'ai') {
+                  // Prefers AI-powered and Most Scalable.
+                  if (key === 'AI-powered' || key === 'Most Scalable') {
+                    vote = 'YES';
+                    rationale = `This fits our technical capabilities beautifully. We can run advanced multi-agent embeddings to make "${key}" a true wow-factor. Let's do it!`;
+                  } else {
+                    vote = 'NO';
+                    rationale = `Without any high-innovation AI leverage, this "${key}" strategy feels a bit basic. We aren't demonstrating enough cutting-edge tech. Let's vote no.`;
+                  }
+                } else if (cat === 'strategist') {
+                  // Prefers Cheapest, Most Scalable, and Community-first.
+                  if (key === 'Cheapest' || key === 'Most Scalable' || key === 'Community-first') {
+                    vote = 'YES';
+                    rationale = `Excellent strategic hook! "${key}" sets a massive entry barrier for competitors and builds an extremely strong business case. High value!`;
+                  } else {
+                    vote = 'NO';
+                    rationale = `From a business perspective, "${key}" is extremely hard to market to our target segment. It won't stand out in the Q&A round. We should skip this.`;
+                  }
+                } else {
+                  // Default split
+                  const nameHash = t.name.charCodeAt(0) + t.name.charCodeAt(t.name.length - 1);
+                  vote = nameHash % 2 === 0 ? 'YES' : 'NO';
+                  rationale = vote === 'YES' 
+                    ? `I'm highly optimistic! Morale is up, and "${key}" gives our pitch presentation a memorable, solid differentiator.`
+                    : `I have a bad feeling about "${key}". It sounds nice on paper but might dilute our core story on the final slides. Let's look for something punchier.`;
+                }
               } else {
-                vote = 'YES';
-                rationale = "Great story. Gives the business viability pitch slides real credibility.";
+                // Business Models (0: Enterprise, 1: Exchange, 2: Developer API, 3: Personal Copilot)
+                const modelId = activeModel ? activeModel.id : 'biz-model-0';
+                
+                if (cat === 'backend') {
+                  // Prefers Model 2 (Developer API) and Model 0 (Enterprise). Dislikes Model 1 (Exchange) and Model 3 (Copilot)
+                  if (modelId === 'biz-model-2' || modelId === 'biz-model-0') {
+                    vote = 'YES';
+                    rationale = `This is extremely solid from an infrastructure perspective. Operating overhead is predictable and easy to implement using standard API endpoints. YES!`;
+                  } else if (modelId === 'biz-model-1') {
+                    vote = 'NO';
+                    rationale = `Managing decentralized transaction brokerage ledgers within a 24h hackathon is a security nightmare. We'll spend all night debugging race conditions. NO.`;
+                  } else {
+                    vote = 'NO';
+                    rationale = `A consumer personal copilot requires complex real-time push engines and huge database scalability. It's too heavy for a stable MVP.`;
+                  }
+                } else if (cat === 'designer') {
+                  // Prefers Model 3 (Personal Copilot) and Model 1 (Exchange). Dislikes Model 2 (Developer API) and Model 0 (Enterprise)
+                  if (modelId === 'biz-model-3' || modelId === 'biz-model-1') {
+                    vote = 'YES';
+                    rationale = `I love this! A consumer-facing App/Exchange gives us infinite room to create stunning, highly interactive interfaces and engaging animations. YES!`;
+                  } else if (modelId === 'biz-model-2') {
+                    vote = 'NO';
+                    rationale = `A headless Developer API has literally zero frontend representation. There's no UI for judges to look at! It's a design disaster. Let's pass.`;
+                  } else {
+                    vote = 'NO';
+                    rationale = `B2B Enterprise portals are incredibly boring and dry to design. It won't showcase our team's creative UI/UX talent. Let's vote no.`;
+                  }
+                } else if (cat === 'strategist') {
+                  // Prefers Model 0 (Enterprise) and Model 3 (Personal Copilot). Dislikes Model 1 (Exchange) and Model 2 (Developer API)
+                  if (modelId === 'biz-model-0' || modelId === 'biz-model-3') {
+                    vote = 'YES';
+                    rationale = `Outstanding unit economics! Recurring subscription revenue is exactly what judges want to see on slide 8. Huge commercial viability. YES!`;
+                  } else {
+                    vote = 'NO';
+                    rationale = `Thin margins and long customer acquisition cycles make this model highly vulnerable. It lacks a clear path to high customer lifetime value (LTV). I vote NO.`;
+                  }
+                } else if (cat === 'ai') {
+                  // Prefers Model 2 (Developer API) and Model 3 (Personal Copilot).
+                  if (modelId === 'biz-model-2' || modelId === 'biz-model-3') {
+                    vote = 'YES';
+                    rationale = `Perfect fit. These models allow us to bundle custom cognitive agents and charge a premium for AI credits/queries. YES!`;
+                  } else {
+                    vote = 'NO';
+                    rationale = `This transactional framework doesn't highlight our technical capabilities or allow for clean monetization of our LLM stack. I vote NO.`;
+                  }
+                } else {
+                  // Default split
+                  const nameHash = t.name.charCodeAt(0) + t.name.charCodeAt(t.name.length - 1);
+                  vote = nameHash % 2 === 0 ? 'YES' : 'NO';
+                  rationale = vote === 'YES'
+                    ? `This business strategy makes total sense for the scenario. It gives us a great pitch narrative!`
+                    : `I'm skeptical. The pricing structure seems overly complex for students to grasp. We should find a simpler alternative.`;
+                }
               }
             }
 
