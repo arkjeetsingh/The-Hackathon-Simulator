@@ -12,7 +12,9 @@ import {
   Cpu,
   Layers,
   Shield,
-  Sparkles
+  Sparkles,
+  Trophy,
+  Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useGameStore } from "@/store/gameStore";
@@ -190,7 +192,7 @@ export default function LandingPage() {
       <div className="absolute inset-0 grid-pattern pointer-events-none z-0 opacity-[0.4]" />
 
       {/* Navigation Header */}
-      <nav className="relative z-10 flex items-center justify-between px-6 md:px-12 py-5 border-b border-neutral-200 bg-[#fafaf8]/50 backdrop-blur-xs select-none">
+      <nav className="relative z-10 flex items-center justify-between px-6 md:px-12 py-4 border-b border-neutral-200 bg-[#fafaf8]/50 backdrop-blur-xs select-none">
         <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer group">
           <div className="p-2 rounded bg-neutral-100 border border-neutral-200 text-neutral-800 group-hover:border-neutral-300 transition-colors">
             <Terminal className="w-4 h-4" />
@@ -201,25 +203,25 @@ export default function LandingPage() {
         </Link>
         <div>
           <span className="text-[10px] text-neutral-400 font-mono tracking-wider font-bold">
-            v1.2.0//REALISM_PASS
+            v2.4.0//STABLE_BUILD
           </span>
         </div>
       </nav>
 
       {/* Main Container */}
-      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-12 max-w-4xl mx-auto w-full space-y-8">
+      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-4 max-w-4xl mx-auto w-full space-y-6">
         
         {/* Core Elevator Section */}
         <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="text-center max-w-xl mx-auto space-y-6"
+          className="text-center max-w-2xl mx-auto space-y-4"
         >
           <motion.div variants={itemVariants} className="flex justify-center">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded border border-neutral-200 bg-[#f4f4f2] text-neutral-600 text-[9px] font-bold tracking-wider uppercase select-none">
-              <Sparkles className="w-3 h-3 text-neutral-600" />
-              UPDATE V1.2 PASS ACTIVATED
+              <Trophy className="w-3 h-3 text-neutral-600" />
+              A DECISION-DRIVEN SIMULATION GAME
             </span>
           </motion.div>
 
@@ -232,9 +234,11 @@ export default function LandingPage() {
 
           <motion.p
             variants={itemVariants}
-            className="text-xs sm:text-[13px] text-neutral-500 font-sans font-light leading-relaxed max-w-md mx-auto"
+            className="text-xs sm:text-[13px] text-neutral-500 font-sans font-light leading-relaxed max-w-xl mx-auto"
           >
-            Build high-fidelity prototypes under strict timed constraints, navigate unexpected hardware or API incidents, and pitch to impressive specialist juries.
+            Experience a complete hackathon journey from problem discovery to final judging. 
+            Build your project under time pressure, collaborate with AI-powered teammates, 
+            survive mentor reviews, create a pitch deck, and defend your decisions before specialist judges.
           </motion.p>
         </motion.div>
 
@@ -243,34 +247,34 @@ export default function LandingPage() {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="w-full max-w-md bg-white border border-neutral-300 rounded-md p-6 shadow-[0_1px_3px_rgba(0,0,0,0.02)] text-left select-none relative overflow-hidden space-y-6"
+          className="w-full max-w-md bg-white border-2 border-neutral-800 rounded-md p-6 shadow-[4px_4px_0px_rgba(0,0,0,0.08)] text-left select-none relative overflow-hidden space-y-5"
         >
-          <div className="absolute top-1 right-2 font-mono text-[8px] text-neutral-300 font-bold select-none">
-            SYSTEM ENGINE: V1.2
+          <div className="absolute top-1.5 right-2.5 font-mono text-[8px] text-neutral-400 font-bold select-none">
+            GAME RUNNER V2.4
           </div>
 
           <div className="space-y-4 font-mono">
-            <div className="flex items-center gap-2 border-b border-neutral-200 pb-2.5">
-              <Clock className="w-4 h-4 text-neutral-800 animate-pulse" />
-              <span className="font-bold text-xs uppercase text-neutral-900">10-MINUTE SIMULATOR EXP.</span>
+            <div className="flex items-center gap-2 border-b border-neutral-200 pb-2">
+              <Clock className="w-4 h-4 text-neutral-850 animate-pulse" />
+              <span className="font-bold text-xs uppercase text-neutral-900">THE REAL GAME SEQUENCE</span>
             </div>
 
-            <div className="space-y-2.5 text-[10px] leading-relaxed text-neutral-600 font-sans">
+            <div className="space-y-3 text-[10px] leading-relaxed text-neutral-600 font-sans">
               <div className="flex gap-2.5">
                 <span className="font-mono text-neutral-900 font-bold mt-0.5">01/</span>
-                <span>Select difficulty scaling tiers (Easy to Hard), starting the global ticking hackathon clock.</span>
+                <span>Choose a real-world problem statement.</span>
               </div>
               <div className="flex gap-2.5">
                 <span className="font-mono text-neutral-900 font-bold mt-0.5">02/</span>
-                <span>Synthesize technology stacks and allocate prioritized feature backlogs without incurring crippling scope bloat.</span>
+                <span>Build an architecture using technologies that actually fit your solution.</span>
               </div>
               <div className="flex gap-2.5">
                 <span className="font-mono text-neutral-900 font-bold mt-0.5">03/</span>
-                <span>Resolve realistic runtime incidents like API rate limits, database crash issues, or teammate departures.</span>
+                <span>Collaborate with teammates who critique and improve your project.</span>
               </div>
               <div className="flex gap-2.5">
                 <span className="font-mono text-neutral-900 font-bold mt-0.5">04/</span>
-                <span>Defend your MVP before distinct specialist judges who grade feasibility, business adoption, or accessibility scales.</span>
+                <span>Create a pitch deck, survive mentor reviews, and face final judging.</span>
               </div>
             </div>
           </div>
@@ -280,7 +284,7 @@ export default function LandingPage() {
             onMouseEnter={playSubtleHover}
             className="w-full h-11 bg-neutral-900 text-white hover:bg-neutral-850 font-bold tracking-wider rounded border border-neutral-900 focus-visible:ring-1 focus-visible:ring-neutral-900 focus-visible:outline-none flex items-center justify-center gap-2 cursor-pointer transition-all hover:-translate-y-0.5 active:translate-y-0 shadow-sm"
           >
-            START HACKATHON
+            START BUILDING
             <ChevronRight className="w-4 h-4" />
           </Button>
 
@@ -294,52 +298,130 @@ export default function LandingPage() {
           )}
         </motion.div>
 
+        {/* Lightweight Simulator Metrics Row */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="flex flex-wrap justify-center items-center gap-x-6 gap-y-2 text-[10px] text-neutral-500 border-y border-neutral-200/80 py-3 w-full max-w-xl font-mono uppercase font-bold select-none text-center"
+        >
+          <span>⏱️ 10 Minute Sessions</span>
+          <span className="hidden sm:inline text-neutral-300">•</span>
+          <span>💡 20+ Problem Categories</span>
+          <span className="hidden sm:inline text-neutral-300">•</span>
+          <span>⚙️ 100+ Tech Combinations</span>
+          <span className="hidden sm:inline text-neutral-300">•</span>
+          <span>👥 Team Personalities</span>
+          <span className="hidden sm:inline text-neutral-300">•</span>
+          <span>⚖️ Dynamic Judging</span>
+        </motion.div>
+
         {/* Feature Highlights Grid */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.4 }}
-          className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-2xl select-none"
+          className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 w-full max-w-3xl select-none"
         >
-          <div className="p-4 bg-white/60 border border-neutral-200 rounded text-left space-y-1.5">
+          {/* Card 1 */}
+          <motion.div
+            whileHover={{ y: -2, borderColor: "#737373" }}
+            transition={{ duration: 0.15 }}
+            className="p-4 bg-white border border-neutral-200 rounded text-left space-y-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.01)] transition-colors"
+          >
             <div className="flex items-center gap-2 text-neutral-900">
-              <Code2 className="w-3.5 h-3.5" />
-              <span className="font-bold text-[10px] uppercase">50+ JUDGING VOICES</span>
+              <Users className="w-3.5 h-3.5 text-neutral-700" />
+              <span className="font-bold text-[10px] uppercase tracking-wide">AI TEAMMATES</span>
             </div>
             <p className="text-[9px] text-neutral-500 font-sans font-light leading-relaxed">
-              Jury evaluations dynamically adapt to your selected USP, business models, and frameworks with personalized quotes.
+              Each teammate has a role, personality, expertise, and opinions. Receive architecture reviews, business feedback, design critiques, and real-time project discussions.
             </p>
-          </div>
+          </motion.div>
 
-          <div className="p-4 bg-white/60 border border-neutral-200 rounded text-left space-y-1.5">
+          {/* Card 2 */}
+          <motion.div
+            whileHover={{ y: -2, borderColor: "#737373" }}
+            transition={{ duration: 0.15 }}
+            className="p-4 bg-white border border-neutral-200 rounded text-left space-y-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.01)] transition-colors"
+          >
             <div className="flex items-center gap-2 text-neutral-900">
-              <Cpu className="w-3.5 h-3.5" />
-              <span className="font-bold text-[10px] uppercase">PROJECT ARCHETYPES</span>
+              <Sparkles className="w-3.5 h-3.5 text-neutral-700" />
+              <span className="font-bold text-[10px] uppercase tracking-wide">DYNAMIC PROJECT BUILDER</span>
             </div>
             <p className="text-[9px] text-neutral-500 font-sans font-light leading-relaxed">
-              Decisions dynamically classify completed runs into 6 archetypes like The Overengineer, The Hustler, or The Minimalist.
+              Generate problem statements, USPs, feature backlogs, business models, and pitch structures tailored to your project.
             </p>
-          </div>
+          </motion.div>
 
-          <div className="p-4 bg-white/60 border border-neutral-200 rounded text-left space-y-1.5">
+          {/* Card 3 */}
+          <motion.div
+            whileHover={{ y: -2, borderColor: "#737373" }}
+            transition={{ duration: 0.15 }}
+            className="p-4 bg-white border border-neutral-200 rounded text-left space-y-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.01)] transition-colors"
+          >
             <div className="flex items-center gap-2 text-neutral-900">
-              <Shield className="w-3.5 h-3.5" />
-              <span className="font-bold text-[10px] uppercase">PREMIUM REALISM</span>
+              <Clock className="w-3.5 h-3.5 text-neutral-700" />
+              <span className="font-bold text-[10px] uppercase tracking-wide">REAL HACKATHON FLOW</span>
             </div>
             <p className="text-[9px] text-neutral-500 font-sans font-light leading-relaxed">
-              Navigate 10 highly realistic incidents with deep strategic trade-offs under the tension of staged evaluation checks.
+              Experience the core loop: Problem Selection → Tech Stack → USP → Backlog → Pitch Deck → Mentor Review → Business Model → Judging → Results.
             </p>
-          </div>
+          </motion.div>
+
+          {/* Card 4 */}
+          <motion.div
+            whileHover={{ y: -2, borderColor: "#737373" }}
+            transition={{ duration: 0.15 }}
+            className="p-4 bg-white border border-neutral-200 rounded text-left space-y-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.01)] transition-colors"
+          >
+            <div className="flex items-center gap-2 text-neutral-900">
+              <Layers className="w-3.5 h-3.5 text-neutral-700" />
+              <span className="font-bold text-[10px] uppercase tracking-wide">ARCHITECTURE REVIEWS</span>
+            </div>
+            <p className="text-[9px] text-neutral-500 font-sans font-light leading-relaxed">
+              Your team actively challenges poor technical decisions, recommends better stacks, and helps optimize execution.
+            </p>
+          </motion.div>
+
+          {/* Card 5 */}
+          <motion.div
+            whileHover={{ y: -2, borderColor: "#737373" }}
+            transition={{ duration: 0.15 }}
+            className="p-4 bg-white border border-neutral-200 rounded text-left space-y-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.01)] transition-colors"
+          >
+            <div className="flex items-center gap-2 text-neutral-900">
+              <Terminal className="w-3.5 h-3.5 text-neutral-700" />
+              <span className="font-bold text-[10px] uppercase tracking-wide">PITCH DECK BUILDER</span>
+            </div>
+            <p className="text-[9px] text-neutral-500 font-sans font-light leading-relaxed">
+              Build and organize your presentation through drag-and-drop storytelling and project strategy decisions.
+            </p>
+          </motion.div>
+
+          {/* Card 6 */}
+          <motion.div
+            whileHover={{ y: -2, borderColor: "#737373" }}
+            transition={{ duration: 0.15 }}
+            className="p-4 bg-white border border-neutral-200 rounded text-left space-y-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.01)] transition-colors"
+          >
+            <div className="flex items-center gap-2 text-neutral-900">
+              <Shield className="w-3.5 h-3.5 text-neutral-700" />
+              <span className="font-bold text-[10px] uppercase tracking-wide">FINAL JUDGING</span>
+            </div>
+            <p className="text-[9px] text-neutral-500 font-sans font-light leading-relaxed">
+              Face judges with unique perspectives who evaluate your project, team decisions, architecture quality, and pitch strength.
+            </p>
+          </motion.div>
         </motion.div>
 
       </main>
 
       {/* Footer */}
-      <footer className="relative z-10 text-center py-6 text-[9px] text-neutral-400 border-t border-neutral-200 select-none">
+      <footer className="relative z-10 text-center py-5 text-[9px] text-neutral-400 border-t border-neutral-200 select-none">
         <div className="flex items-center justify-center gap-2">
           <Terminal className="w-3 h-3 text-neutral-400" />
           <span>
-            THE HACKATHON SIMULATOR v1.2 — ZERO BACKEND — 100% LOCAL CLIENT-SIDE SYSTEM
+            THE HACKATHON SIMULATOR v2.4 — ZERO BACKEND — 100% LOCAL CLIENT-SIDE SYSTEM
           </span>
         </div>
       </footer>
