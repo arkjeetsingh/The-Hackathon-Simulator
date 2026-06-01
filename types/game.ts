@@ -350,6 +350,7 @@ export interface GameState {
   teammateDecisions: TeammateDecision[];
   lastContextState: Record<string, string>;
   isBackendLocked: boolean;
+  hasCrewVotedThisStage: Record<string, boolean>;
 }
 
 export interface TeammateDecision {
@@ -460,6 +461,7 @@ export interface GameActions {
   clearUnreadChatCount: () => void;
   triggerTeamChatMessage: (event: string, payload?: any) => void;
   updateTeammateContext: () => void;
+  triggerCrewVote: (voteType: 'usp' | 'businessModel') => void;
 }
 
 export interface TeamChatMessage {
@@ -471,6 +473,14 @@ export interface TeamChatMessage {
   timestamp: string;
   isRead: boolean;
   type?: 'info' | 'suggestion' | 'warning' | 'disagreement' | 'contribution' | 'action_completed' | 'waiting';
+  adviceDetails?: {
+    title: string;
+    observation: string;
+    concern: string;
+    recommendation: string;
+    expectedImpact: string;
+    tradeoffs?: string;
+  };
   changeSummary?: {
     before: string;
     after: string;

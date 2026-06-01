@@ -41,6 +41,7 @@ import { getDailyChallenge } from '@/lib/dailyChallenge';
 import { evaluatePitchDeck } from '@/lib/pitchDeckEvaluator';
 import { TECH_REGISTRY, toRegistryId, toStoreId } from '@/data/techRegistry';
 import { generateCustomElevatorPitch, calculateMentorConfidence } from '@/lib/projectStrategyGenerator';
+import { ARCHITECTURE_TEMPLATES } from '@/data/architectureTemplates';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -352,6 +353,9 @@ function getRoleCategory(role: string): 'backend' | 'designer' | 'frontend' | 's
 }
 
 export function checkTeammateGating(teammate: Teammate, state: GameState): { isGated: boolean; reason: string; } {
+  if (isRoleRelevantForStage(teammate.role, state.stage)) {
+    return { isGated: false, reason: "Ready to give advice" };
+  }
   const role = (teammate.role || "").toLowerCase();
   const techStack = state.techStack || [];
   const hasUsp = !!state.usp || !!state.primaryUsp || !!state.secondaryUsp;
@@ -999,6 +1003,7 @@ const initialGameState = {
   teammateDecisions: [] as TeammateDecision[],
   lastContextState: {} as Record<string, string>,
   isBackendLocked: false,
+  hasCrewVotedThisStage: {} as Record<string, boolean>,
 };
 
 // ---------------------------------------------------------------------------
@@ -1819,13 +1824,63 @@ export const useGameStore = create<GameState & GameActions>()(
           const adviceCard = generateTeammateAdvice(teammateId, state);
           if (!adviceCard) return;
 
+          const timestamp = getSimulatedTime(state.globalTimeRemaining, state.globalTotalTime);
+          const newMessage: TeamChatMessage = {
+            id: teammateId + "-advice-" + Date.now(),
+            senderId: teammateId,
+            senderName: teammate.name,
+            senderAvatar: teammate.avatar,
+            text: `Proposed a recommendation: ${adviceCard.title}.`,
+            timestamp,
+            isRead: false,
+            type: 'suggestion',
+            adviceDetails: {
+              title: adviceCard.title,
+              observation: adviceCard.observation,
+              concern: adviceCard.concern,
+              recommendation: adviceCard.recommendation,
+              expectedImpact: adviceCard.expectedImpact,
+              tradeoffs: adviceCard.tradeoffs
+            },
+            discussion: {
+              resolved: false,
+              choices: [
+                {
+                  label: "Apply Suggestion",
+                  description: adviceCard.recommendation,
+                  outcomeText: "Followed teammate recommendation.",
+                  modifiers: adviceCard.modifiers || {},
+                  action: {
+                    type: 'apply_teammate_advice',
+                    payload: { teammateId }
+                  }
+                },
+                {
+                  label: "Ignore",
+                  description: "Trust our own implementation design.",
+                  outcomeText: "Teammate recommendation ignored.",
+                  modifiers: {},
+                  action: {
+                    type: 'reject_teammate_advice',
+                    payload: { teammateId }
+                  }
+                }
+              ]
+            }
+          };
+
           set((s) => ({
             team: updatedTeam,
             activeTeammateAdvice: {
               ...s.activeTeammateAdvice,
               [teammateId]: adviceCard
-            }
+            },
+            teamChatMessages: [...s.teamChatMessages, newMessage],
+            unreadChatCount: s.unreadChatCount + 1
           }), false, 'team/useTeammateHelp');
+
+          playNotificationSound();
+          get().updateTeammateContext();
         },
 
         applyTeammateAdvice: (teammateId) => {
@@ -1868,12 +1923,16 @@ export const useGameStore = create<GameState & GameActions>()(
               const toId = act.payload.to;
               const filteredStack = get().techStack.filter(t => !fromList.includes(toRegistryId(t.id)));
               const regItem = TECH_REGISTRY.find(r => r.id === toRegistryId(toId));
-              if (regItem && !filteredStack.some(x => x.id === toStoreId(regItem.id))) {
+              if (regItem) {
+                const activeTemplate = ARCHITECTURE_TEMPLATES[get().solutionDirection || 'web-app'] || ARCHITECTURE_TEMPLATES['web-app'];
+                const slot = activeTemplate.slots.find(s => s.compatibleCategories.includes(regItem.category));
+                const targetSlotId = slot ? slot.id : regItem.category;
+                
                 extraState.techStack = [...filteredStack, {
                   id: toStoreId(regItem.id),
                   name: regItem.name,
                   icon: 'layers',
-                  category: regItem.category,
+                  category: targetSlotId,
                   difficulty: regItem.difficultyScore,
                   synergies: (regItem.synergy || []).map(toStoreId)
                 }];
@@ -1882,7 +1941,23 @@ export const useGameStore = create<GameState & GameActions>()(
               const removeName = act.payload?.removeName;
               const addTech = act.payload?.addTech;
               const filtered = get().techStack.filter(t => !t.name.toLowerCase().includes(removeName.toLowerCase()));
-              extraState.techStack = [...filtered, addTech];
+              const regItem = TECH_REGISTRY.find(r => r.name.toLowerCase() === addTech.name.toLowerCase() || r.id === toRegistryId(addTech.id));
+              if (regItem) {
+                const activeTemplate = ARCHITECTURE_TEMPLATES[get().solutionDirection || 'web-app'] || ARCHITECTURE_TEMPLATES['web-app'];
+                const slot = activeTemplate.slots.find(s => s.compatibleCategories.includes(regItem.category));
+                const targetSlotId = slot ? slot.id : regItem.category;
+                
+                extraState.techStack = [...filtered, {
+                  id: toStoreId(regItem.id),
+                  name: regItem.name,
+                  icon: 'layers',
+                  category: targetSlotId,
+                  difficulty: regItem.difficultyScore,
+                  synergies: (regItem.synergy || []).map(toStoreId)
+                }];
+              } else {
+                extraState.techStack = [...filtered, addTech];
+              }
             } else if (act.type === 'reduce_scope') {
               if (get().features.length > 0) {
                 const sorted = [...get().features].sort((a, b) => {
@@ -1901,15 +1976,21 @@ export const useGameStore = create<GameState & GameActions>()(
               const complexAi = ['reg-langchain', 'reg-tensorflow', 'reg-pytorch', 'reg-huggingface'];
               const filteredStack = get().techStack.filter(t => !complexAi.includes(toRegistryId(t.id)));
               const geminiItem = TECH_REGISTRY.find(r => r.id === 'reg-gemini');
-              if (geminiItem && !filteredStack.some(x => x.id === toStoreId(geminiItem.id))) {
-                extraState.techStack = [...filteredStack, {
-                  id: toStoreId(geminiItem.id),
-                  name: geminiItem.name,
-                  icon: 'layers',
-                  category: geminiItem.category,
-                  difficulty: geminiItem.difficultyScore,
-                  synergies: (geminiItem.synergy || []).map(toStoreId)
-                }];
+              if (geminiItem) {
+                const activeTemplate = ARCHITECTURE_TEMPLATES[get().solutionDirection || 'web-app'] || ARCHITECTURE_TEMPLATES['web-app'];
+                const slot = activeTemplate.slots.find(s => s.compatibleCategories.includes(geminiItem.category));
+                const targetSlotId = slot ? slot.id : geminiItem.category;
+                
+                if (!filteredStack.some(x => x.id === toStoreId(geminiItem.id))) {
+                  extraState.techStack = [...filteredStack, {
+                    id: toStoreId(geminiItem.id),
+                    name: geminiItem.name,
+                    icon: 'layers',
+                    category: targetSlotId,
+                    difficulty: geminiItem.difficultyScore,
+                    synergies: (geminiItem.synergy || []).map(toStoreId)
+                  }];
+                }
               }
             } else if (act.type === 'rewrite_pitch') {
               extraState.pitchText = "A high-impact demonstration of our solution, designed to hook the judges instantly.";
@@ -1927,23 +2008,27 @@ export const useGameStore = create<GameState & GameActions>()(
               }
             } else if (act.type === 'add_tech_directly') {
               const techItem = act.payload?.techItem;
-              if (techItem) {
+              const techId = act.payload?.techId;
+              const targetId = techItem ? techItem.id : techId;
+              const targetName = techItem ? techItem.name : '';
+              
+              const regItem = TECH_REGISTRY.find(r => r.id === toRegistryId(targetId) || (targetName && r.name.toLowerCase() === targetName.toLowerCase()));
+              if (regItem) {
+                const activeTemplate = ARCHITECTURE_TEMPLATES[get().solutionDirection || 'web-app'] || ARCHITECTURE_TEMPLATES['web-app'];
+                const slot = activeTemplate.slots.find(s => s.compatibleCategories.includes(regItem.category));
+                const targetSlotId = slot ? slot.id : regItem.category;
+                
+                const filteredStack = get().techStack.filter(x => toRegistryId(x.id) !== toRegistryId(regItem.id));
+                extraState.techStack = [...filteredStack, {
+                  id: toStoreId(regItem.id),
+                  name: regItem.name,
+                  icon: 'layers',
+                  category: targetSlotId,
+                  difficulty: regItem.difficultyScore,
+                  synergies: (regItem.synergy || []).map(toStoreId)
+                }];
+              } else if (techItem) {
                 extraState.techStack = [...get().techStack, techItem];
-              } else {
-                const techId = act.payload?.techId;
-                if (techId) {
-                  const regItem = TECH_REGISTRY.find(r => r.id === toRegistryId(techId));
-                  if (regItem && !get().techStack.some(x => toRegistryId(x.id) === toRegistryId(regItem.id))) {
-                    extraState.techStack = [...get().techStack, {
-                      id: toStoreId(regItem.id),
-                      name: regItem.name,
-                      icon: 'layers',
-                      category: regItem.category,
-                      difficulty: regItem.difficultyScore,
-                      synergies: (regItem.synergy || []).map(toStoreId)
-                    }];
-                  }
-                }
               }
             } else if (act.type === 'add_slide_directly') {
               const slide = act.payload.slide;
@@ -2090,7 +2175,15 @@ export const useGameStore = create<GameState & GameActions>()(
           let afterText = "None.";
 
           if (action) {
-            if (action.type === 'apply_mentor_advice') {
+            if (action.type === 'apply_teammate_advice') {
+              beforeText = "Teammate Advice: Pending.";
+              get().applyTeammateAdvice(action.payload.teammateId);
+              afterText = "Teammate Advice: Applied.";
+            } else if (action.type === 'reject_teammate_advice') {
+              beforeText = "Teammate Advice: Pending.";
+              get().rejectTeammateAdvice(action.payload.teammateId);
+              afterText = "Teammate Advice: Rejected.";
+            } else if (action.type === 'apply_mentor_advice') {
               beforeText = "Mentor Suggestions: Pending.";
               get().applyAdvisorAdvice(action.payload.adviceId);
               afterText = "Mentor Suggestions: Applied.";
@@ -2431,10 +2524,44 @@ export const useGameStore = create<GameState & GameActions>()(
             if (hasRailway) hostCount++;
             if (hasVercel) hostCount++;
 
+            // Determine matching role for this technology
+            const techCat = (addedTech.category || "").toLowerCase();
+            let requiredRoleCat: 'backend' | 'designer' | 'frontend' | 'ai' | 'strategist' | 'pitch' | 'researcher' | null = null;
+            
+            if (techCat === 'database' || techCat === 'backend' || techCat === 'hosting' || techCat === 'devops' || techCat === 'hosting / infra') {
+              requiredRoleCat = 'backend';
+            } else if (techCat === 'ai / ml' || techCat === 'ai') {
+              requiredRoleCat = 'ai';
+            } else if (techCat === 'frontend' || techCat === 'ui/ux' || techCat === 'ui') {
+              requiredRoleCat = 'designer'; // product designer or frontend
+            } else if (techCat === 'library' || techCat === 'css' || techCat === 'styling') {
+              requiredRoleCat = 'frontend';
+            }
+
+            // Find a real teammate in the crew who has the matching role category
+            const matchingTeammate = team.find(t => {
+              const teammateCat = getRoleCategory(t.role || '');
+              if (requiredRoleCat === 'designer') {
+                return teammateCat === 'designer' || teammateCat === 'frontend';
+              }
+              if (requiredRoleCat === 'frontend') {
+                return teammateCat === 'frontend' || teammateCat === 'designer';
+              }
+              return teammateCat === requiredRoleCat;
+            });
+
+            // If there's no matching teammate for this technology category in the crew, we DO NOT post generic messages!
+            if (!matchingTeammate) {
+              messageText = "";
+              return;
+            }
+
+            teammateToUse = matchingTeammate;
+
             // 1. CONFLICTING STACKS (any 3 backends)
             const backends = state.techStack.filter(t => t.category === 'Backend' || t.category === 'backend');
             if (backends.length >= 3 || (hasNode && hasGo && hasSpring)) {
-              messageText = "What exactly are we building here? We now have three backend philosophies competing with each other. We are overengineering.";
+              messageText = `Wait, what are we building for "${state.selectedProblem?.title || "our project"}"? We now have three backend philosophies competing with each other in the codebase. Let's simplify this.`;
               msgType = 'disagreement';
               isSilent = false;
               debateChoices = [
@@ -2452,11 +2579,10 @@ export const useGameStore = create<GameState & GameActions>()(
                   modifiers: { execution: -12 }
                 }
               ];
-              teammateToUse = backendMate;
             }
             // 2. MERN + GO
             else if (hasGo && hasNode) {
-              messageText = "Why are we introducing Go after already committing to Node.js? Are we committing to JavaScript or Go? Both creates unnecessary complexity.";
+              messageText = `Why are we introducing Go for "${state.selectedProblem?.title || "our project"}" after already committing to Node.js? Stacking both JavaScript and Go creates massive runtime friction.`;
               msgType = 'disagreement';
               isSilent = false;
               debateChoices = [
@@ -2474,11 +2600,10 @@ export const useGameStore = create<GameState & GameActions>()(
                   modifiers: { execution: -8 }
                 }
               ];
-              teammateToUse = backendMate;
             }
             // 3. MULTIPLE MODEL PROVIDERS (Gemini + OpenAI)
             else if (aiCount >= 2) {
-              messageText = `We now have ${aiCount} AI providers solving one problem. That's not AI-powered, that's over-engineered.`;
+              messageText = `We now have ${aiCount} AI providers in our stack for "${state.selectedProblem?.title || "our project"}". That's not AI-powered, that's just duplicate dependencies!`;
               msgType = 'warning';
               isSilent = false;
               debateChoices = [
@@ -2496,11 +2621,10 @@ export const useGameStore = create<GameState & GameActions>()(
                   modifiers: { execution: -6, bonus: 4 }
                 }
               ];
-              teammateToUse = aiMate;
             }
             // 4. OVER-HOSTING
             else if (hostCount >= 3) {
-              messageText = "We're building a hackathon MVP, not Netflix. Multiple hosting platforms? This is over-engineering.";
+              messageText = `We're building a hackathon MVP, not a global multi-region cloud. Multiple hosting platforms for "${state.selectedProblem?.title || "our project"}" is overkill.`;
               msgType = 'warning';
               isSilent = false;
               debateChoices = [
@@ -2518,36 +2642,65 @@ export const useGameStore = create<GameState & GameActions>()(
                   modifiers: { execution: -10 }
                 }
               ];
-              teammateToUse = backendMate;
             }
             // 5. CLEAN FULL STACK (Next.js + Vercel + PostgreSQL)
             else if (hasNext && hasVercel && hasPostgres) {
-              messageText = "This architecture is surprisingly clean. Next.js + Vercel + PostgreSQL is a solid production stack.";
+              messageText = `This architecture looks extremely clean for "${state.selectedProblem?.title || "our project"}". Next.js + Vercel + PostgreSQL is a highly robust and scalable production stack. Let's lock this in!`;
               msgType = 'contribution';
               isSilent = false;
-              teammateToUse = backendMate;
             }
             // 6. Next.js + Vercel deployment synergy
             else if (hasNext && hasVercel) {
-              messageText = "Next.js + Vercel is a great combo. Fast deploys, instant preview URLs — judges will see a live demo without issues.";
+              messageText = `Next.js + Vercel is an outstanding combo for "${state.selectedProblem?.title || "our project"}". Instant serverless endpoints and preview URLs will make our demo stand out to the judges.`;
               msgType = 'contribution';
               isSilent = false;
-              teammateToUse = designerMate;
             }
-            // 7. Normal tech add reaction — only available-pool techs, no external suggestions
+            // 7. Highly personalized role-appropriate tech addition reaction
             else {
-              messageText = `${addedTech.name} added to the stack. Let's make sure we integrate it properly before the demo.`;
+              const projName = state.selectedProblem?.title || "our prototype";
+              if (requiredRoleCat === 'backend') {
+                messageText = `I see we added ${addedTech.name} to the backend stack. This fits perfectly for supporting data transactions and model persistence in ${projName}. Let's get it wired up!`;
+              } else if (requiredRoleCat === 'ai') {
+                messageText = `Adding ${addedTech.name} is a huge move for ${projName}! This gives us the semantic and cognitive capabilities we need to blow the judges away with AI features.`;
+              } else if (requiredRoleCat === 'designer' || requiredRoleCat === 'frontend') {
+                messageText = `Awesome, ${addedTech.name} added! I'll leverage this to craft a beautiful, fluid, and highly interactive interface for ${projName}.`;
+              } else {
+                messageText = `Let's integrate ${addedTech.name} into ${projName}. This will help keep our tech implementation details highly aligned.`;
+              }
               msgType = 'info';
-              isSilent = true;
-              teammateToUse = backendMate;
+              isSilent = false; // Let the player see this beautiful personalized message!
             }
           } else if (event === 'tech_remove') {
             const removedTech = payload as TechItem;
             if (!removedTech) return;
-            messageText = `Removed ${removedTech.name} from the stack. Simplifying our dev setup should help with feasibility.`;
+            const techCat = (removedTech.category || "").toLowerCase();
+            let requiredRoleCat: 'backend' | 'designer' | 'frontend' | 'ai' | 'strategist' | 'pitch' | 'researcher' | null = null;
+            if (techCat === 'database' || techCat === 'backend' || techCat === 'hosting' || techCat === 'devops' || techCat === 'hosting / infra') {
+              requiredRoleCat = 'backend';
+            } else if (techCat === 'ai / ml' || techCat === 'ai') {
+              requiredRoleCat = 'ai';
+            } else if (techCat === 'frontend' || techCat === 'ui/ux' || techCat === 'ui') {
+              requiredRoleCat = 'designer';
+            } else if (techCat === 'library' || techCat === 'css' || techCat === 'styling') {
+              requiredRoleCat = 'frontend';
+            }
+
+            const matchingTeammate = team.find(t => {
+              const teammateCat = getRoleCategory(t.role || '');
+              if (requiredRoleCat === 'designer') return teammateCat === 'designer' || teammateCat === 'frontend';
+              if (requiredRoleCat === 'frontend') return teammateCat === 'frontend' || teammateCat === 'designer';
+              return teammateCat === requiredRoleCat;
+            });
+
+            if (!matchingTeammate) {
+              messageText = "";
+              return;
+            }
+
+            teammateToUse = matchingTeammate;
+            messageText = `Removed ${removedTech.name} from the stack. Simplifying our dev setup should help with feasibility on "${state.selectedProblem?.title || "our project"}".`;
             msgType = 'info';
-            isSilent = true;
-            teammateToUse = backendMate;
+            isSilent = false;
           } else if (event === 'backlog_change') {
             const highEffort = state.features.filter(f => f.effort === 'high');
             if (highEffort.length >= 2) {
@@ -2571,100 +2724,20 @@ export const useGameStore = create<GameState & GameActions>()(
               ];
               teammateToUse = designerMate;
             } else {
-              messageText = `Backlog updated. We have ${state.features.length} features prioritized. Let's make sure we can actually ship all of them.`;
+              messageText = `Backlog updated. We have ${state.features.length} features prioritized. Let's make sure we can ship all of them.`;
               msgType = 'info';
               isSilent = true;
               teammateToUse = designerMate;
             }
           } else if (event === 'usp_change') {
-            const jargonTerms = ["decentralized", "consensus", "orchestration", "multi-threaded", "cryptographic", "microservices", "scalable"];
-            const isJargon = jargonTerms.some(term => uspText.toLowerCase().includes(term)) || uspText.length > 50;
-
-            if (isJargon) {
-              messageText = `This USP sounds too technical. A judge won't understand it in 10 seconds. Let's simplify the messaging.`;
-              msgType = 'disagreement';
-              isSilent = false;
-              debateChoices = [
-                {
-                  label: "Apply Suggestion",
-                  description: "Simplify USP to consumer-facing messaging.",
-                  outcomeText: "Simplified USP to focus on core user benefit.",
-                  modifiers: { design: 10, pitch: 10, execution: 2 },
-                  action: { type: 'simplify_usp' }
-                },
-                {
-                  label: "Ignore",
-                  description: "Retain our deep technical value proposition.",
-                  outcomeText: "Kept technical USP alignment.",
-                  modifiers: { innovation: 8, pitch: -6 }
-                }
-              ];
-              teammateToUse = designerMate;
-            } else {
-              const memoryPhrase = hasPreviouslyAcceptedUX ? "Looks like the simplification worked! " : "";
-              messageText = `${memoryPhrase}That's a really clever USP. This could help us stand out in front of the judges.`;
-              msgType = 'contribution';
-              isSilent = false;
-              debateChoices = [
-                {
-                  label: "Apply Suggestion",
-                  description: "Focus our pitch deck slides around this USP.",
-                  outcomeText: "Aligned slide sequencing to showcase core USP.",
-                  modifiers: { pitch: 12 },
-                  action: { type: 'focus_ux' }
-                },
-                {
-                  label: "Ignore",
-                  description: "Keep the standard deck flow.",
-                  outcomeText: "Proceeded with generic pitch deck template.",
-                  modifiers: { pitch: -2 }
-                }
-              ];
-              teammateToUse = strategistMate;
-            }
+            // Unnecessary automated spams disabled per team lead request.
+            // Explicit votes and strategist consulting are now user-triggered.
+            messageText = "";
+            return;
           } else if (event === 'biz_model_change') {
-            if (state.businessModel?.toLowerCase().includes("freemium")) {
-              messageText = `Freemium is fine for onboarding, but we need to show a clear path to revenue. Who is paying for the server hosting?`;
-              msgType = 'disagreement';
-              isSilent = false;
-              debateChoices = [
-                {
-                  label: "Apply Suggestion",
-                  description: "Pivot to high margin Enterprise B2B SaaS licensing.",
-                  outcomeText: "Shifted business model to Enterprise B2B SaaS licensing.",
-                  modifiers: { pitch: 12, design: -2 },
-                  action: { type: 'enterprise_first' }
-                },
-                {
-                  label: "Ignore",
-                  description: "Stick with freemium client acquisition funnel.",
-                  outcomeText: "Maintained Freemium business model.",
-                  modifiers: { innovation: 6 }
-                }
-              ];
-              teammateToUse = strategistMate;
-            } else {
-              messageText = `We are discussing our monetization strategy. Enterprise B2B SaaS targeting corporate clients seems high margin. Should we lock it in?`;
-              msgType = 'suggestion';
-              isSilent = false;
-              debateChoices = [
-                {
-                  label: "Apply Suggestion",
-                  description: "Lock Enterprise B2B SaaS licensing strategy.",
-                  outcomeText: "Confirmed Enterprise B2B SaaS model.",
-                  modifiers: { pitch: 10 },
-                  action: { type: 'enterprise_first' }
-                },
-                {
-                  label: "Ignore",
-                  description: "Explore standard freemium pricing options instead.",
-                  outcomeText: "Reverted monetization strategy to Freemium tier modeling.",
-                  modifiers: { design: 6, pitch: -4 },
-                  action: { type: 'freemium_first' }
-                }
-              ];
-              teammateToUse = strategistMate;
-            }
+            // Unnecessary automated spams disabled per team lead request.
+            messageText = "";
+            return;
           } else if (event === 'mentor_advice') {
             const advice = payload as AdvisorAdvice;
             if (!advice) return;
@@ -2802,6 +2875,139 @@ export const useGameStore = create<GameState & GameActions>()(
           const { teamChatMessages, lastContextState } = getUpdatedContextMessages(state);
           set({ teamChatMessages, lastContextState }, false, 'team/updateTeammateContext');
         },
+
+        triggerCrewVote: (voteType) => {
+          const state = get();
+          const team = state.team;
+          if (team.length === 0) return;
+
+          const timestamp = getSimulatedTime(state.globalTimeRemaining, state.globalTotalTime);
+
+          // Get details of what we are voting on
+          let subjectTitle = "";
+          let subjectDesc = "";
+          if (voteType === 'usp') {
+            subjectTitle = state.usp || state.primaryUsp || "No USP Selected";
+            subjectDesc = "Unique Value Proposition";
+          } else {
+            const activeModel = state.generatedBusinessModels.find(m => m.id === state.businessModel);
+            subjectTitle = activeModel ? activeModel.name : "No Business Model Selected";
+            subjectDesc = "Business Model Strategy";
+          }
+
+          // Build a beautiful poll message Text
+          let pollText = `🗳️ TEAM POLL RESOLUTION: **${subjectTitle}**\n\n`;
+          pollText += `The Team Lead requested a crew-wide vote on our chosen ${subjectDesc}.\n\n`;
+          
+          let yesCount = 0;
+          let noCount = 0;
+
+          const votesList = team.map(t => {
+            const cat = getRoleCategory(t.role || '');
+            let vote = 'YES';
+            let rationale = "";
+
+            if (voteType === 'usp') {
+              if (cat === 'backend') {
+                vote = state.techStack.length > 2 ? 'YES' : 'NO';
+                rationale = vote === 'YES' 
+                  ? "Execution feasibility looks excellent; our database structures support this value proposition cleanly!" 
+                  : "We have very few backend tools selected. Implementing this USP will require massive database overhead.";
+              } else if (cat === 'designer') {
+                vote = 'YES';
+                rationale = "User feedback strongly validates this advantage! Onboarding flow will be super simple.";
+              } else if (cat === 'ai') {
+                vote = state.techStack.some(x => x.category === 'AI / ML') ? 'YES' : 'NO';
+                rationale = vote === 'YES'
+                  ? "Excellent synergy with our Gemini API endpoints. This is a true differentiator!"
+                  : "We aren't using any AI tools. Calling this a unique advantage feels speculative.";
+              } else if (cat === 'strategist') {
+                vote = 'YES';
+                rationale = "Strong alignment. This USP sets up a very high entry barrier for competitors.";
+              } else {
+                vote = 'YES';
+                rationale = "Morale is high. This gives our pitch presentation a solid, memorable hook!";
+              }
+            } else {
+              // businessModel
+              if (cat === 'backend') {
+                vote = 'YES';
+                rationale = "Operational and hosting expenses align cleanly with this revenue framework.";
+              } else if (cat === 'designer') {
+                vote = 'YES';
+                rationale = "Frictionless flow. Charging models don't block the onboarding UX.";
+              } else if (cat === 'strategist') {
+                vote = subjectTitle.toLowerCase().includes("saas") || subjectTitle.toLowerCase().includes("subscription") ? 'YES' : 'NO';
+                rationale = vote === 'YES'
+                  ? "Outstanding unit economics! Recurring B2B revenue is exactly what judges want to see."
+                  : "A one-time transactional model has poor lifetime value (LTV). SaaS would be much more lucrative.";
+              } else {
+                vote = 'YES';
+                rationale = "Great story. Gives the business viability pitch slides real credibility.";
+              }
+            }
+
+            if (vote === 'YES') yesCount++; else noCount++;
+
+            return {
+              name: t.name,
+              role: t.role,
+              avatar: t.avatar,
+              vote,
+              rationale
+            };
+          });
+
+          const totalVotes = team.length;
+          const consensusPct = Math.round((yesCount / totalVotes) * 100);
+          const approved = yesCount > noCount;
+
+          let resultText = `**POLL RESULTS:**\n`;
+          votesList.forEach(v => {
+            resultText += `• ${v.avatar} **${v.name}** (${v.role}): Voted **${v.vote}** — *"${v.rationale}"*\n`;
+          });
+
+          resultText += `\n**FINAL CONSENSUS:** **${yesCount} YES / ${noCount} NO** (${consensusPct}% Alignment)\n`;
+          resultText += approved 
+            ? `🟢 **APPROVED:** The crew has voted in favor of this strategy! Pitch readiness boosted.` 
+            : `🔴 **WARNING:** The crew has highlighted strategic risks. We can proceed, or re-evaluate.`;
+
+          const newMessage: TeamChatMessage = {
+            id: `crew-vote-${Date.now()}`,
+            senderId: "team-lead",
+            senderName: "Crew Poll Bot",
+            senderAvatar: "🗳️",
+            text: pollText + resultText,
+            timestamp,
+            isRead: false,
+            type: 'info'
+          };
+
+          // Apply a small score boost if crew approves!
+          let scoreBonus = 0;
+          if (approved) {
+            scoreBonus = 5;
+            const currentScore = state.score;
+            set({
+              score: {
+                ...currentScore,
+                bonus: currentScore.bonus + scoreBonus,
+                total: currentScore.innovation + currentScore.execution + currentScore.design + currentScore.pitch + currentScore.bonus + scoreBonus
+              }
+            }, false, 'team/crewVoteBonus');
+          }
+
+          set(s => ({
+            teamChatMessages: [...s.teamChatMessages, newMessage],
+            unreadChatCount: s.unreadChatCount + 1,
+            hasCrewVotedThisStage: {
+              ...s.hasCrewVotedThisStage,
+              [state.stage]: true
+            }
+          }), false, 'team/triggerCrewVote');
+
+          playNotificationSound();
+        },
       }),
       {
         name: 'hackathon-simulator-sprint2-persist',
@@ -2853,6 +3059,7 @@ export const useGameStore = create<GameState & GameActions>()(
           teammateDecisions: state.teammateDecisions,
           lastContextState: state.lastContextState,
           isBackendLocked: state.isBackendLocked,
+          hasCrewVotedThisStage: state.hasCrewVotedThisStage,
         }),
       }
     ),

@@ -1608,7 +1608,13 @@ function UspStage() {
     selectedProblem, 
     solutionDirection, 
     techStack, 
-    gameMode 
+    gameMode,
+    team,
+    activeTeammateAdvice,
+    useTeammateHelp,
+    triggerCrewVote,
+    hasCrewVotedThisStage,
+    stage
   } = useGameStore();
 
   const [loading, setLoading] = useState(false);
@@ -1803,6 +1809,109 @@ function UspStage() {
           );
         })}
       </div>
+
+      {/* 👥 CREW COLLABORATION ENGINE */}
+      {team.length > 0 && (
+        <div className="mt-8 max-w-4xl mx-auto border-2 border-neutral-900 bg-neutral-900 text-white rounded-lg p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)] select-none">
+          <div className="flex items-center justify-between border-b border-neutral-800 pb-3 mb-4">
+            <div className="text-left font-mono">
+              <span className="text-[10px] text-amber-400 font-bold block uppercase tracking-wider">👥 CREW COLLABORATION ENGINE</span>
+              <span className="text-[9px] text-neutral-450 block font-light leading-normal">
+                Leverage your team's unique perspectives and roles to validate our product direction.
+              </span>
+            </div>
+            <span className="text-[8px] bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded uppercase font-bold tracking-wide font-mono">
+              STAGE: USP VALIDATION
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Column 1: Ask Strategist/Product advice */}
+            <div className="p-3 bg-neutral-950 border border-neutral-850 rounded flex flex-col justify-between text-left space-y-3">
+              <div className="space-y-1">
+                <span className="text-[8px] text-amber-500 font-bold uppercase tracking-wide block font-mono">💬 CONSULT TEAM SPECIALIST</span>
+                <p className="text-[9px] text-neutral-400 font-light font-sans leading-relaxed">
+                  Ask a Product Strategist, Designer, or Researcher to evaluate choices and deliver custom, inline recommendations.
+                </p>
+              </div>
+
+              {(() => {
+                const strategistTeammate = team.find(t => {
+                  const r = (t.role || "").toLowerCase();
+                  return r.includes('strategist') || r.includes('founder') || r.includes('business') || r.includes('designer') || r.includes('ux') || r.includes('researcher');
+                });
+
+                if (strategistTeammate) {
+                  return (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-1.5 p-1.5 rounded bg-neutral-900 border border-neutral-800">
+                        <span className="text-lg">{strategistTeammate.avatar}</span>
+                        <div className="text-left">
+                          <span className="font-bold text-[9px] text-white block leading-none">{strategistTeammate.name}</span>
+                          <span className="text-[7.5px] text-neutral-400 uppercase tracking-tight">{strategistTeammate.role}</span>
+                        </div>
+                      </div>
+                      <Button
+                        size="xs"
+                        onClick={() => {
+                          playMutedClick();
+                          useTeammateHelp(strategistTeammate.id, stage);
+                        }}
+                        disabled={strategistTeammate.helpTokenUsed || !!activeTeammateAdvice[strategistTeammate.id]}
+                        className="w-full bg-amber-500 text-neutral-950 hover:bg-amber-400 border-none font-bold text-[8.5px] font-mono tracking-wider uppercase h-7 cursor-pointer"
+                      >
+                        {activeTeammateAdvice[strategistTeammate.id]
+                          ? "PROPOSAL PENDING IN CHAT..."
+                          : strategistTeammate.helpTokenUsed
+                            ? "ADVICE TOKEN CONSUMED"
+                            : `ASK FOR ${strategistTeammate.name.toUpperCase()}'S ADVICE`}
+                      </Button>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="p-3 border border-dashed border-neutral-800 rounded bg-neutral-900/50 text-center py-6">
+                    <span className="text-[8.5px] text-neutral-500 font-bold block uppercase tracking-wide font-mono">🔒 NO STRATEGIST IN CREW</span>
+                    <span className="text-[7.5px] text-neutral-650 block mt-1 font-sans">
+                      Hire a Product Strategist or Designer in Lobby next run to unlock expert consulting.
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Column 2: Cast a Crew-wide Poll Vote */}
+            <div className="p-3 bg-neutral-950 border border-neutral-850 rounded flex flex-col justify-between text-left space-y-3">
+              <div className="space-y-1">
+                <span className="text-[8px] text-emerald-500 font-bold uppercase tracking-wide block font-mono">🗳️ TRIGGER CREW-WIDE POLL</span>
+                <p className="text-[9px] text-neutral-400 font-light font-sans leading-relaxed">
+                  Call an immediate crew-wide vote on our current selection. All active crew members will cast their votes based on their specific roles.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                {hasCrewVotedThisStage[stage] ? (
+                  <div className="p-2 border border-emerald-950/40 bg-emerald-950/20 text-emerald-400 rounded text-center text-[8px] font-bold font-mono py-4">
+                    ✓ CREW POLL RECORDED IN CHAT FEED (+5 POINT PITCH BONUS APPLIED)
+                  </div>
+                ) : (
+                  <Button
+                    size="xs"
+                    onClick={() => {
+                      playMutedClick();
+                      triggerCrewVote('usp');
+                    }}
+                    className="w-full bg-emerald-600 text-white hover:bg-emerald-500 border-none font-bold text-[8.5px] font-mono tracking-wider uppercase h-7 cursor-pointer"
+                  >
+                    ⚡ INITIATE CREW VOTE
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </GameplayStageCard>
   );
 }
@@ -2731,7 +2840,13 @@ function BusinessModelStage() {
     techStack, 
     features, 
     gameMode,
-    updateScore 
+    updateScore,
+    team,
+    activeTeammateAdvice,
+    useTeammateHelp,
+    triggerCrewVote,
+    hasCrewVotedThisStage,
+    stage
   } = useGameStore();
 
   // 1. Procedurally generate business models on stage load
@@ -2878,6 +2993,109 @@ function BusinessModelStage() {
             
             <div className="text-[8px] text-neutral-400 border-t border-neutral-800 pt-2 text-center font-sans font-light">
               Revenue strategy successfully linked to your elevator pitch. Commercial viability verified.
+            </div>
+          </div>
+        )}
+
+        {/* 👥 CREW COLLABORATION ENGINE */}
+        {team.length > 0 && (
+          <div className="mt-8 border-2 border-neutral-900 bg-neutral-900 text-white rounded-lg p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)] select-none">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3 mb-4">
+              <div className="text-left font-mono">
+                <span className="text-[10px] text-amber-400 font-bold block uppercase tracking-wider">👥 CREW COLLABORATION ENGINE</span>
+                <span className="text-[9px] text-neutral-450 block font-light leading-normal">
+                  Leverage your team's unique perspectives and roles to validate our product direction.
+                </span>
+              </div>
+              <span className="text-[8px] bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded uppercase font-bold tracking-wide font-mono">
+                STAGE: BUSINESS MODEL
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Column 1: Ask Strategist/Product advice */}
+              <div className="p-3 bg-neutral-950 border border-neutral-850 rounded flex flex-col justify-between text-left space-y-3">
+                <div className="space-y-1">
+                  <span className="text-[8px] text-amber-500 font-bold uppercase tracking-wide block font-mono">💬 CONSULT TEAM SPECIALIST</span>
+                  <p className="text-[9px] text-neutral-400 font-light font-sans leading-relaxed">
+                    Ask a Product Strategist, Designer, or Researcher to evaluate choices and deliver custom, inline recommendations.
+                  </p>
+                </div>
+
+                {(() => {
+                  const strategistTeammate = team.find(t => {
+                    const r = (t.role || "").toLowerCase();
+                    return r.includes('strategist') || r.includes('founder') || r.includes('business') || r.includes('designer') || r.includes('ux') || r.includes('researcher');
+                  });
+
+                  if (strategistTeammate) {
+                    return (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-1.5 p-1.5 rounded bg-neutral-900 border border-neutral-800">
+                          <span className="text-lg">{strategistTeammate.avatar}</span>
+                          <div className="text-left">
+                            <span className="font-bold text-[9px] text-white block leading-none">{strategistTeammate.name}</span>
+                            <span className="text-[7.5px] text-neutral-400 uppercase tracking-tight">{strategistTeammate.role}</span>
+                          </div>
+                        </div>
+                        <Button
+                          size="xs"
+                          onClick={() => {
+                            playMutedClick();
+                            useTeammateHelp(strategistTeammate.id, stage);
+                          }}
+                          disabled={strategistTeammate.helpTokenUsed || !!activeTeammateAdvice[strategistTeammate.id]}
+                          className="w-full bg-amber-500 text-neutral-950 hover:bg-amber-400 border-none font-bold text-[8.5px] font-mono tracking-wider uppercase h-7 cursor-pointer"
+                        >
+                          {activeTeammateAdvice[strategistTeammate.id]
+                            ? "PROPOSAL PENDING IN CHAT..."
+                            : strategistTeammate.helpTokenUsed
+                              ? "ADVICE TOKEN CONSUMED"
+                              : `ASK FOR ${strategistTeammate.name.toUpperCase()}'S ADVICE`}
+                        </Button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="p-3 border border-dashed border-neutral-800 rounded bg-neutral-900/50 text-center py-6">
+                      <span className="text-[8.5px] text-neutral-500 font-bold block uppercase tracking-wide font-mono">🔒 NO STRATEGIST IN CREW</span>
+                      <span className="text-[7.5px] text-neutral-650 block mt-1 font-sans">
+                        Hire a Product Strategist or Designer in Lobby next run to unlock expert consulting.
+                      </span>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Column 2: Cast a Crew-wide Poll Vote */}
+              <div className="p-3 bg-neutral-950 border border-neutral-850 rounded flex flex-col justify-between text-left space-y-3">
+                <div className="space-y-1">
+                  <span className="text-[8px] text-emerald-500 font-bold uppercase tracking-wide block font-mono">🗳️ TRIGGER CREW-WIDE POLL</span>
+                  <p className="text-[9px] text-neutral-400 font-light font-sans leading-relaxed">
+                    Call an immediate crew-wide vote on our current selection. All active crew members will cast their votes based on their specific roles.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {hasCrewVotedThisStage[stage] ? (
+                    <div className="p-2 border border-emerald-950/40 bg-emerald-950/20 text-emerald-400 rounded text-center text-[8px] font-bold font-mono py-4">
+                      ✓ CREW POLL RECORDED IN CHAT FEED (+5 POINT PITCH BONUS APPLIED)
+                    </div>
+                  ) : (
+                    <Button
+                      size="xs"
+                      onClick={() => {
+                        playMutedClick();
+                        triggerCrewVote('businessModel');
+                      }}
+                      className="w-full bg-emerald-600 text-white hover:bg-emerald-500 border-none font-bold text-[8.5px] font-mono tracking-wider uppercase h-7 cursor-pointer"
+                    >
+                      ⚡ INITIATE CREW VOTE
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -5478,6 +5696,73 @@ function PersistentTeamPanel({
               </div>
             ) : (
               <div className="p-2 space-y-2">
+                {/* Crew Collaboration Actions in Chat Panel */}
+                {(stage === 'usp' || stage === 'businessModel') && (
+                  <div className="p-2 border border-neutral-200 rounded-md bg-neutral-900 text-white space-y-1.5 mb-2 select-none text-[8.5px]">
+                    <div className="flex items-center justify-between font-mono font-bold border-b border-neutral-800 pb-1 uppercase tracking-wider text-amber-500">
+                      <span>⚡ CREW COLLABORATION BOARD</span>
+                      <span className="text-[7.5px] bg-neutral-850 text-neutral-400 px-1 py-0.2 rounded font-normal font-sans tracking-normal">
+                        STAGE: {stage === 'usp' ? 'USP' : 'BIZ MODEL'}
+                      </span>
+                    </div>
+                    <div className="flex gap-1">
+                      {/* Consult Specialist Button */}
+                      {(() => {
+                        const strategistTeammate = team.find((t: any) => {
+                          const r = (t.role || "").toLowerCase();
+                          return r.includes('strategist') || r.includes('founder') || r.includes('business') || r.includes('designer') || r.includes('ux') || r.includes('researcher');
+                        });
+
+                        if (strategistTeammate) {
+                          const hasAdvice = !!activeTeammateAdvice[strategistTeammate.id];
+                          return (
+                            <button
+                              disabled={strategistTeammate.helpTokenUsed || hasAdvice}
+                              onClick={() => {
+                                playMutedClick();
+                                useTeammateHelp(strategistTeammate.id, stage);
+                              }}
+                              className="flex-1 bg-amber-500 text-neutral-950 font-bold uppercase tracking-wider rounded border-none py-1 hover:bg-amber-400 disabled:opacity-50 text-[8px] cursor-pointer"
+                            >
+                              {hasAdvice ? "PENDING..." : strategistTeammate.helpTokenUsed ? "USED" : `CONSULT ${strategistTeammate.name.toUpperCase()}`}
+                            </button>
+                          );
+                        }
+                        return (
+                          <button
+                            disabled
+                            className="flex-1 bg-neutral-800 text-neutral-500 rounded border-none py-1 text-[7.5px] cursor-not-allowed"
+                            title="No specialist in crew"
+                          >
+                            🔒 NO SPECIALIST
+                          </button>
+                        );
+                      })()}
+
+                      {/* Vote Button */}
+                      {state.hasCrewVotedThisStage && state.hasCrewVotedThisStage[stage] ? (
+                        <button
+                          disabled
+                          className="flex-1 bg-emerald-950/20 text-emerald-400 border border-emerald-900/40 rounded py-1 font-bold uppercase text-[7.5px]"
+                        >
+                          ✓ VOTED (+5)
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            playMutedClick();
+                            const { triggerCrewVote } = useGameStore.getState();
+                            triggerCrewVote(stage === 'usp' ? 'usp' : 'businessModel');
+                          }}
+                          className="flex-1 bg-emerald-600 text-white font-bold uppercase tracking-wider rounded border-none py-1 hover:bg-emerald-500 text-[8px] cursor-pointer"
+                        >
+                          🗳️ ASK TEAM TO VOTE
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {teamChatMessages.length === 0 ? (
                   <div className="text-center py-6 text-neutral-400 text-[9px]">
                     No messages yet.
@@ -5503,7 +5788,42 @@ function PersistentTeamPanel({
                           </span>
                         )}
 
-                        <p className="text-[9px] text-neutral-700 leading-relaxed font-sans">{msg.text}</p>
+                        {msg.type === 'suggestion' && msg.adviceDetails ? (
+                          <div className="p-2 border border-purple-200 bg-purple-50/40 rounded space-y-2 mt-1 text-[9px] leading-relaxed">
+                            <div className="font-bold text-purple-900 border-b border-purple-150 pb-0.5 uppercase tracking-wide font-mono text-[8px] flex items-center justify-between">
+                              <span>💡 TEAMMATE PROPOSAL</span>
+                              <span className="text-[7.5px] bg-purple-100 text-purple-800 px-1 py-0.2 rounded font-normal font-sans tracking-normal select-none">
+                                {msg.adviceDetails.title}
+                              </span>
+                            </div>
+                            <div className="space-y-1.5 font-sans text-neutral-750">
+                              <div>
+                                <strong className="font-mono text-neutral-500 text-[8px] uppercase block tracking-wider leading-tight">Observation:</strong> 
+                                <span className="font-light">{msg.adviceDetails.observation}</span>
+                              </div>
+                              <div>
+                                <strong className="font-mono text-neutral-500 text-[8px] uppercase block tracking-wider leading-tight">Concern:</strong> 
+                                <span className="font-light">{msg.adviceDetails.concern}</span>
+                              </div>
+                              <div>
+                                <strong className="font-mono text-purple-950 text-[8px] uppercase block tracking-wider leading-tight">Recommendation:</strong> 
+                                <span className="font-semibold text-purple-900">{msg.adviceDetails.recommendation}</span>
+                              </div>
+                              <div>
+                                <strong className="font-mono text-neutral-500 text-[8px] uppercase block tracking-wider leading-tight">Expected Outcome:</strong> 
+                                <span className="font-light">{msg.adviceDetails.expectedImpact}</span>
+                              </div>
+                              {msg.adviceDetails.tradeoffs && (
+                                <div>
+                                  <strong className="font-mono text-neutral-500 text-[8px] uppercase block tracking-wider leading-tight">Tradeoffs:</strong> 
+                                  <span className="font-light italic text-neutral-550">{msg.adviceDetails.tradeoffs}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-[9px] text-neutral-700 leading-relaxed font-sans">{msg.text}</p>
+                        )}
 
                         {msg.changeSummary && (
                           <div className="p-1.5 rounded border border-neutral-200 bg-neutral-50 font-mono text-[8px] space-y-1">
@@ -5577,113 +5897,7 @@ function getSubtleGatingStatus(teammate: any) {
 }
 
 function TeammateAdviceNotification() {
-  const { activeTeammateAdvice, team, applyTeammateAdvice, rejectTeammateAdvice } = useGameStore();
-
-  const adviceList = Object.entries(activeTeammateAdvice);
-  if (adviceList.length === 0) return null;
-
-  return (
-    <div className="max-w-4xl mx-auto px-4 mt-2 space-y-2 text-left font-mono text-[11px]">
-      {adviceList.map(([teammateId, advice]) => {
-        const teammate = team.find(t => t.id === teammateId);
-        if (!teammate) return null;
-
-        if (advice.isNotConfident) {
-          return (
-            <div key={teammateId} className="border border-neutral-350 bg-amber-50/75 rounded px-3 py-2 shadow-sm flex items-center justify-between gap-3 animate-fade-in">
-              <div className="flex items-center gap-1.5 text-neutral-900 font-medium">
-                <span className="text-sm">{teammate.avatar}</span>
-                <span>{advice.explanation}</span>
-              </div>
-              <Button
-                size="xs"
-                variant="outline"
-                onClick={() => {
-                  playMutedClick();
-                  rejectTeammateAdvice(teammateId);
-                }}
-                className="text-[10px] h-6 cursor-pointer border-neutral-400 text-neutral-800 hover:bg-neutral-100"
-              >
-                DISMISS
-              </Button>
-            </div>
-          );
-        }
-
-        return (
-          <div key={teammateId} className="border-2 border-neutral-900 bg-amber-50 rounded p-4 shadow-[3px_3px_0px_rgba(0,0,0,1)] space-y-3 animate-fade-in">
-            <div className="flex items-start justify-between border-b border-neutral-250 pb-2">
-              <div className="flex items-center gap-1.5 font-bold text-neutral-900">
-                <span className="text-base">{teammate.avatar}</span>
-                <div>
-                  <span className="block leading-none text-xs">{teammate.name} ({teammate.role})</span>
-                  <span className="text-[9px] text-neutral-450 font-normal uppercase tracking-wider">TEAMMATE RECOMMENDATION</span>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  playMutedClick();
-                  rejectTeammateAdvice(teammateId);
-                }}
-                className="text-neutral-455 hover:text-red-600 text-[10px] font-bold"
-              >
-                [DISMISS]
-              </button>
-            </div>
-
-            <div className="space-y-1">
-              <h4 className="text-neutral-900 font-bold uppercase text-[11px] font-mono leading-tight">
-                {advice.title}
-              </h4>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-neutral-200/50 text-[10px] text-neutral-650 font-sans font-light">
-              <div className="space-y-0.5">
-                <strong className="font-mono uppercase text-[9px] block text-neutral-700">OBSERVATION:</strong>
-                <p>{advice.observation}</p>
-              </div>
-              <div className="space-y-0.5">
-                <strong className="font-mono uppercase text-[9px] block text-neutral-700">CONCERN:</strong>
-                <p>{advice.concern}</p>
-              </div>
-              <div className="space-y-0.5">
-                <strong className="font-mono uppercase text-[9px] block text-neutral-700">RECOMMENDATION:</strong>
-                <p>{advice.recommendation}</p>
-              </div>
-              <div className="space-y-0.5">
-                <strong className="font-mono uppercase text-[9px] block text-neutral-700">EXPECTED OUTCOME:</strong>
-                <p>{advice.expectedImpact}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-200/50">
-              <Button
-                size="xs"
-                variant="outline"
-                onClick={() => {
-                  playMutedClick();
-                  rejectTeammateAdvice(teammateId);
-                }}
-                className="text-[10px] h-7 cursor-pointer"
-              >
-                REJECT ADVICE
-              </Button>
-              <Button
-                size="xs"
-                onClick={() => {
-                  playMutedClick();
-                  applyTeammateAdvice(teammateId);
-                }}
-                className="bg-neutral-900 text-white hover:bg-neutral-800 border border-neutral-900 text-[10px] h-7 cursor-pointer"
-              >
-                APPLY ADVICE
-              </Button>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+  return null; // Completely moved inline to persistent team chat window!
 }
 
 function TeamChatMomentModal() {
