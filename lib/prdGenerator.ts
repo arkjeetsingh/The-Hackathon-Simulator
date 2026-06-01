@@ -267,14 +267,20 @@ function reconstructBacklogBuckets(mustFeatures: Feature[]): { must: Feature[]; 
  * Procedurally compiles a complete, venture-grade startup Product Requirements Document.
  */
 export function generatePRD(state: GameState): string {
-  const problem = state.selectedProblem;
+  const problem = state?.selectedProblem;
   const category = problem?.category || "ai";
   const details = CATEGORY_DETAILS[category] || DEFAULT_CATEGORY_DETAILS;
-  const { name: startupName, tagline: startupTagline } = generateStartupName(problem, state.usp, state.solutionDirection);
+  const { name: startupName, tagline: startupTagline } = generateStartupName(problem, state?.usp || null, state?.solutionDirection || null);
   
-  const feedback = state.judgeFeedback[state.judgeFeedback.length - 1];
+  const feedbackList = state?.judgeFeedback || [];
+  const feedback = feedbackList.length > 0 ? feedbackList[feedbackList.length - 1] : undefined;
   const finalScoreVal = feedback?.score || 0;
   const displayScore = (finalScoreVal / 2).toFixed(1);
+  const scoreTotal = typeof state?.score === "number"
+    ? state.score
+    : (state?.score && typeof state.score === "object" && typeof state.score.total === "number"
+      ? state.score.total
+      : finalScoreVal);
   
   const getGrade = (score: number) => {
     if (score >= 94) return "S";
@@ -286,15 +292,18 @@ export function generatePRD(state: GameState): string {
   };
   const grade = getGrade(finalScoreVal);
 
+  const safeTechStack = state?.techStack || [];
+  const safeFeatures = state?.features || [];
+
   const archetype = classifyProjectArchetype({
-    techStack: state.techStack,
-    features: state.features,
-    usp: state.usp,
-    businessModel: state.businessModel,
-    solutionDirection: state.solutionDirection,
+    techStack: safeTechStack,
+    features: safeFeatures,
+    usp: state?.usp || null,
+    businessModel: state?.businessModel || null,
+    solutionDirection: state?.solutionDirection || null,
   });
 
-  const { must, nice, overkill } = reconstructBacklogBuckets(state.features);
+  const { must, nice, overkill } = reconstructBacklogBuckets(safeFeatures);
 
   // Dynamic user flow text based on solution direction
   let userFlowContent = "";
@@ -732,7 +741,7 @@ Based on the official jury assessment of our project build:
 * **Project Archetype**: **${archetype.name}** (${archetype.subtitle})
 
 > [!NOTE]
-> **Venture Assessment**: **"${state.score.total >= 72 ? "SHOULD BE PURSUED IMMEDIATELY" : "REQUIRES STRATEGIC SCRAPPING"}"**
+> **Venture Assessment**: **"${scoreTotal >= 72 ? "SHOULD BE PURSUED IMMEDIATELY" : "REQUIRES STRATEGIC SCRAPPING"}"**
 
 * **Confidence Score**: **${confidenceScore}/100**
 * **Startup Potential Rating**: **${startupRating}**

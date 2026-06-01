@@ -715,7 +715,7 @@ Return only the final PRD.`;
             temperature: 0.35,
             max_tokens: 3000
           })
-        }, 15000);
+        }, 45000);
 
         if (!response.ok) {
           throw new Error(`OpenAI responded with status ${response.status}`);
@@ -740,7 +740,7 @@ Return only the final PRD.`;
             temperature: 0.35,
             max_tokens: 3000
           })
-        }, 15000);
+        }, 45000);
 
         if (!response.ok) {
           throw new Error(`OpenRouter responded with status ${response.status}`);
@@ -766,7 +766,7 @@ Return only the final PRD.`;
               maxOutputTokens: 2500
             }
           })
-        }, 15000);
+        }, 45000);
 
         if (!response.ok) {
           throw new Error(`Gemini responded with status ${response.status}`);
